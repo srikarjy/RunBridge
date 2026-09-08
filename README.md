@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 1 — core domain model.** The repository now contains dependency-free domain types and invariant tests. No API, database, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 2 — PostgreSQL persistence.** The repository contains domain types, invariant tests, a constrained PostgreSQL schema, embedded migrations, and transactional persistence for the current aggregates. No API, authentication service, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -141,7 +141,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** architecture documentation and dependency-free Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. There is no runtime command.
+**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures. A small `pgx`-backed store persists current actors, projects, memberships, proposals, and revisions. There is no runtime command.
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
@@ -159,6 +159,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `internal/preflight/`, `internal/rundiff/` | Deterministic validation and semantic comparisons |
 | `internal/policy/`, `internal/approvals/` | Rules, reviewer decisions, and immutable approval targets |
 | `internal/execution/` | Durable coordination, retries, cancellation, and reconciliation |
+| `internal/postgres/` | Embedded PostgreSQL migrations and persistence adapters |
 | `internal/audit/`, `internal/observability/` | Event history and operational signals |
 | `integrations/seqera/` | External API translation and behavior |
 | `configs/`, `deployments/` | Configuration guidance and future deployment direction |
@@ -169,7 +170,9 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 1 — core domain model.** The foundation establishes scope and architecture; Phase 1 adds the minimum domain model and invariant tests. No HTTP API, persistence, authorization service, workflow-specific normalization, execution backend, or deployable service exists yet.
+**Phase 2 — PostgreSQL persistence.** The minimum domain model now has durable schema and transactional storage. No HTTP API, authentication/authorization service, workflow-specific normalization, execution backend, or deployable service exists yet.
+
+Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 
 ## Roadmap
 

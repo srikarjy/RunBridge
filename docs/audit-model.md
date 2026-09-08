@@ -1,6 +1,6 @@
 # Audit model
 
-Planned design; no event store exists yet. Audit history should answer who requested what, what changed, who approved it, what executed, and what happened. PostgreSQL will hold append-oriented evidence alongside lifecycle records.
+Planned behavior; the Phase 2 schema reserves a constrained `audit_events` table, but no event-writing service or timeline API exists yet. Audit history should answer who requested what, what changed, who approved it, what executed, and what happened. PostgreSQL will hold append-oriented evidence alongside lifecycle records.
 
 ## Event envelope
 

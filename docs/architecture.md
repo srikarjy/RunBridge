@@ -1,6 +1,6 @@
 # Architecture
 
-Stage 1 design only. All components described here are planned. Start with one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq. No runtime, schemas, API routes, or integration contracts are implemented.
+The core domain model and PostgreSQL persistence foundation are implemented through Phase 2. API, authorization, workflow-specific validation/diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -60,9 +60,9 @@ Submission must derive from frozen execution-relevant data. Credentials are reso
 
 ## Persistence and transaction boundaries
 
-PostgreSQL is the system of record for identities, projects, memberships, proposals, normalized revisions, validation/diff evidence, policy decisions, approvals, run state, submission attempts, external execution IDs, events, and artifact references. Exact tables and indexes are deferred.
+PostgreSQL is the system of record for identities, projects, memberships, proposals, normalized revisions, policy decisions, approvals, run state, submission attempts, external execution IDs, and audit events. The Phase 2 schema establishes these structural relationships and expected access indexes; later phases will evolve it when validation, diff, execution, and artifact domain models become concrete.
 
-Conceptually, a local transaction should commit a state change, its audit event, and any durable work intent together. Unique constraints and conditional state/revision updates will protect against concurrent commands. External HTTP calls cannot commit atomically with PostgreSQL. Persist intent, perform the call outside the transaction, and record or reconcile its outcome. No distributed transaction or queue is assumed to remove this uncertainty.
+Current aggregate writes use short transactions, and revision creation locks its proposal row before checking the next revision. Future lifecycle operations must commit a state change, its audit event, and any durable work intent together. Unique constraints and conditional state/revision updates protect against concurrent commands. External HTTP calls cannot commit atomically with PostgreSQL. Persist intent, perform the call outside the transaction, and record or reconcile its outcome. No distributed transaction or queue is assumed to remove this uncertainty.
 
 ## Audit and observability
 
