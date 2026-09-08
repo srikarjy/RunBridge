@@ -1,0 +1,35 @@
+# Go binaries, build artifacts, and test output
+/bin/
+/build/
+/dist/
+/runbridge
+*.test
+*.out
+/coverage/
+coverage.txt
+coverage.html
+
+# Local editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local configuration and credentials; keep sanitized examples tracked
+.env
+.env.*
+!.env.example
+!.env.*.example
+/credentials/
+/secrets/
+*.pem
+*.key
+
+# Local database volumes and temporary output
+/.local/
+/pgdata/
+/tmp/
+*.log
