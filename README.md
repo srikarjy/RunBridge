@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Stage 1 — repository and architecture foundation.** This repository contains documentation, directory placeholders, and minimal Go module metadata. No backend, API, database, integration, or runnable application exists yet. All capabilities below describe intended behavior.
+**Current status: Phase 1 — core domain model.** The repository now contains dependency-free domain types and invariant tests. No API, database, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -141,7 +141,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** documentation, Git configuration files, and dependency-free Go module metadata. There are no Go packages or runtime commands yet.
+**Present:** architecture documentation and dependency-free Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. There is no runtime command.
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
@@ -165,11 +165,11 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `docs/` | Architecture, lifecycle, approval, audit, and reliability designs |
 | `tests/integration/`, `tests/fixtures/` | Future integration verification and sanitized fixture data |
 
-Empty `.gitkeep` files retain planned directories in Git; they are not implemented packages. This layout is provisional and may be simplified as the first vertical slice reveals real boundaries.
+Empty `.gitkeep` files retain the remaining planned directories in Git; they are not implemented packages. This layout is provisional and may be simplified as the first vertical slice reveals real boundaries.
 
 ## Current Status
 
-**Stage 1 — repository and architecture foundation.** This stage establishes scope, architecture, conceptual state and approval models, audit expectations, reliability requirements, and repository organization. No execution backend has been implemented during this stage. There is nothing to run or deploy yet.
+**Phase 1 — core domain model.** The foundation establishes scope and architecture; Phase 1 adds the minimum domain model and invariant tests. No HTTP API, persistence, authorization service, workflow-specific normalization, execution backend, or deployable service exists yet.
 
 ## Roadmap
 

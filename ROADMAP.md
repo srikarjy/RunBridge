@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Only Phase 0 is complete in Stage 1.** Every later phase is planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 and 1 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -11,6 +11,8 @@ The sequence builds capabilities incrementally; no live launch path should be ex
 **Completion gate:** scope and invariants are documented; planned directories are tracked without source stubs; there is no runtime, database implementation, Seqera client, Run Diff logic, state machine, or cryptography.
 
 ## Phase 1 — Core Domain Model
+
+**Complete.**
 
 Define the minimum user/actor, project, membership, run proposal, run specification, workflow identifier, normalized configuration, and run status entities. Separate domain rules from HTTP, database details, and Seqera. Define revision identity, immutability, project ownership, and legal operation invariants without overgeneralizing workflow support.
 
