@@ -1,10 +1,14 @@
-.PHONY: fmt test vet build terraform-fmt terraform-validate verify
+.PHONY: fmt test test-integration vet build terraform-fmt terraform-validate verify
 
 fmt:
 	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
 
 test:
 	go test -race ./...
+
+test-integration:
+	test -n "$$RUNBRIDGE_TEST_DATABASE_URL"
+	go test -race -v ./tests/integration
 
 vet:
 	go vet ./...

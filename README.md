@@ -186,7 +186,7 @@ git diff --check
 terraform fmt -check -recursive deployments/terraform
 ```
 
-The latest coverage run reports package coverage for the tested domain and integration boundaries; PostgreSQL methods remain integration-tested only when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated database.
+The latest coverage run reports package coverage for the tested domain and integration boundaries. Run `make test-integration` with `RUNBRIDGE_TEST_DATABASE_URL` pointing to a dedicated PostgreSQL database to verify migrations, exact-byte persistence, project isolation, transactional rollback, durable submission claims, reconciliation recovery, retry conflict handling, and transition audit records.
 
 ## Current Status
 

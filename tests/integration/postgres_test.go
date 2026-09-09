@@ -120,6 +120,42 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatalf("transition audit events = %#v", auditEvents)
 	}
 
+	if err := store.CreateExecutionWithWorkspace(ctx, "execution-2", projectID.String(), proposal.ID().String(), current.ID().String(), approval.ID().String(), runs.StatusApproved, "workspace-123", time.Unix(6, 0).UTC()); err != nil {
+		t.Fatalf("create workspace execution: %v", err)
+	}
+	if err := store.ClaimSubmission(ctx, "execution-2", "attempt-1", "correlation-1", 1, time.Unix(7, 0).UTC()); err != nil {
+		t.Fatalf("claim initial submission: %v", err)
+	}
+	if err := store.TransitionExecution(ctx, "execution-2", runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil); err != nil {
+		t.Fatalf("mark submission unknown: %v", err)
+	}
+	candidates, err := store.ListCandidates(ctx, 10)
+	if err != nil {
+		t.Fatalf("list reconciliation candidates: %v", err)
+	}
+	found := false
+	for _, candidate := range candidates {
+		if candidate.ExecutionID == "execution-2" {
+			found = candidate.WorkspaceID == "workspace-123" && candidate.CorrelationID == "correlation-1" && candidate.AttemptNumber == 1 && candidate.ExpectedStatus == runs.StatusSubmissionUnknown
+		}
+	}
+	if !found {
+		t.Fatalf("workspace execution not recoverable: %#v", candidates)
+	}
+	if err := store.ClaimRetrySubmission(ctx, "execution-2", "attempt-2", "correlation-2", 2, time.Unix(8, 0).UTC()); err != nil {
+		t.Fatalf("claim retry submission: %v", err)
+	}
+	if err := store.ClaimRetrySubmission(ctx, "execution-2", "attempt-3", "correlation-3", 3, time.Unix(9, 0).UTC()); !errors.Is(err, postgres.ErrConflict) {
+		t.Fatalf("duplicate retry claim error = %v, want ErrConflict", err)
+	}
+	var attemptCount int
+	if err := db.QueryRowContext(ctx, `select count(*) from execution_attempts where execution_id = 'execution-2'`).Scan(&attemptCount); err != nil {
+		t.Fatalf("count retry attempts: %v", err)
+	}
+	if attemptCount != 2 {
+		t.Fatalf("attempt count = %d, want 2 after duplicate rollback", attemptCount)
+	}
+
 	wrongProjectID, _ := projects.NewProjectID("project-2")
 	if _, err := store.GetProposal(ctx, wrongProjectID, proposal.ID()); !errors.Is(err, postgres.ErrNotFound) {
 		t.Fatalf("cross-project lookup error = %v, want ErrNotFound", err)
