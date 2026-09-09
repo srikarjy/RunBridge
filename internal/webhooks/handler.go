@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/srikarjy/RunBridge/internal/events"
+	"github.com/srikarjy/RunBridge/internal/observability"
 	"github.com/srikarjy/RunBridge/internal/security"
 )
 
@@ -18,10 +19,16 @@ type Handler struct {
 	verifier *security.WebhookVerifier
 	sink     Sink
 	now      func() time.Time
+	metrics  *observability.Metrics
 }
 
 func NewHandler(verifier *security.WebhookVerifier, sink Sink) *Handler {
 	return &Handler{verifier: verifier, sink: sink, now: time.Now}
+}
+
+func (handler *Handler) WithMetrics(metrics *observability.Metrics) *Handler {
+	handler.metrics = metrics
+	return handler
 }
 
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {

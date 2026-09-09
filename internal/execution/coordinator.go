@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/srikarjy/RunBridge/internal/observability"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
@@ -33,10 +34,16 @@ type Coordinator struct {
 	attempts AttemptStarter
 	states   StateWriter
 	launcher Launcher
+	metrics  *observability.Metrics
 }
 
 func NewCoordinator(attempts AttemptStarter, states StateWriter, launcher Launcher) *Coordinator {
 	return &Coordinator{attempts: attempts, states: states, launcher: launcher}
+}
+
+func (coordinator *Coordinator) WithMetrics(metrics *observability.Metrics) *Coordinator {
+	coordinator.metrics = metrics
+	return coordinator
 }
 
 func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attemptID, correlationID string, attemptNumber int64, request LaunchRequest, startedAt time.Time) (runs.Status, string, error) {
@@ -47,18 +54,30 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 		return "", "", fmt.Errorf("create submission attempt: %w", err)
 	}
 	if err := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusApproved, runs.StatusSubmitting, nil, nil); err != nil {
+		if coordinator.metrics != nil {
+			coordinator.metrics.TransitionConflicts.Add(1)
+		}
 		return "", "", fmt.Errorf("claim execution submission: %w", err)
 	}
 	response, err := coordinator.launcher.Submit(ctx, request)
 	if err != nil {
+		if coordinator.metrics != nil {
+			coordinator.metrics.SubmissionFailures.Add(1)
+		}
 		_ = coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil)
 		return runs.StatusSubmissionUnknown, "", fmt.Errorf("%w: %v", ErrSubmissionUncertain, err)
 	}
 	if response.ExternalExecutionID == "" {
+		if coordinator.metrics != nil {
+			coordinator.metrics.SubmissionFailures.Add(1)
+		}
 		_ = coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil)
 		return runs.StatusSubmissionUnknown, "", ErrSubmissionUncertain
 	}
 	if err := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusRunning, nil, &response.ExternalExecutionID); err != nil {
+		if coordinator.metrics != nil {
+			coordinator.metrics.TransitionConflicts.Add(1)
+		}
 		return "", "", fmt.Errorf("record accepted execution: %w", err)
 	}
 	return runs.StatusRunning, response.ExternalExecutionID, nil
