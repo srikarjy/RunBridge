@@ -431,6 +431,13 @@ func (store *Store) ApplyExternalEvent(ctx context.Context, event events.Event, 
 		return events.Conflict, fmt.Errorf("apply external event: begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `select exists(select 1 from audit_events where source_system = $1 and source_event_id = $2)`, event.Source, event.ID).Scan(&exists); err != nil {
+		return events.Conflict, fmt.Errorf("apply external event: check duplicate: %w", err)
+	}
+	if exists {
+		return events.Duplicate, nil
+	}
 	metadata := []byte(`{}`)
 	_, err = tx.ExecContext(ctx, `
         insert into audit_events (id, schema_version, project_id, actor_kind, event_type,
