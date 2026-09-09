@@ -54,3 +54,13 @@ func TestCoordinatorPreservesUncertainty(t *testing.T) {
 		t.Fatalf("uncertain submission: %s %v", status, err)
 	}
 }
+
+func TestCoordinatorCancelsOnlyApprovedExecution(t *testing.T) {
+	store := &fakeCoordinatorStore{}
+	if err := NewCoordinator(store, store, fakeLauncher{}).CancelBeforeSubmission(context.Background(), "exec-1"); err != nil {
+		t.Fatal(err)
+	}
+	if store.next != runs.StatusCancelled {
+		t.Fatalf("status: %s", store.next)
+	}
+}

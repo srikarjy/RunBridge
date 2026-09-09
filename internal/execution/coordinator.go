@@ -92,3 +92,13 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 	}
 	return runs.StatusRunning, response.ExternalExecutionID, nil
 }
+
+// CancelBeforeSubmission withdraws an approved execution locally. Once
+// submission has begun, cancellation must go through the external system and
+// a confirmed event before the lifecycle becomes CANCELLED.
+func (coordinator *Coordinator) CancelBeforeSubmission(ctx context.Context, executionID string) error {
+	if coordinator == nil || coordinator.states == nil {
+		return errors.New("execution coordinator is not configured")
+	}
+	return coordinator.states.TransitionExecution(ctx, executionID, runs.StatusApproved, runs.StatusCancelled, nil, nil)
+}

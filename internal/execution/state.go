@@ -44,7 +44,7 @@ const (
 )
 
 var allowed = map[runs.Status]map[runs.Status]struct{}{
-	runs.StatusApproved:          {runs.StatusSubmitting: {}},
+	runs.StatusApproved:          {runs.StatusSubmitting: {}, runs.StatusCancelled: {}},
 	runs.StatusSubmitting:        {runs.StatusRunning: {}, runs.StatusSubmissionUnknown: {}, runs.StatusFailed: {}, runs.StatusCancelled: {}},
 	runs.StatusSubmissionUnknown: {runs.StatusRunning: {}, runs.StatusSubmitting: {}, runs.StatusFailed: {}, runs.StatusCancelled: {}},
 	runs.StatusRunning:           {runs.StatusSucceeded: {}, runs.StatusFailed: {}, runs.StatusCancelled: {}},
