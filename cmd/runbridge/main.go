@@ -21,7 +21,11 @@ import (
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	serviceHandler, closeDB := configuredHandler(logger)
+	serviceHandler, closeDB, configurationErr := configuredHandler(logger)
+	if configurationErr != nil {
+		logger.Error("service configuration failed", "error", configurationErr)
+		os.Exit(1)
+	}
 	defer closeDB()
 	server := &http.Server{Addr: env("RUNBRIDGE_ADDR", ":8080"), Handler: serviceHandler}
 	stop := make(chan os.Signal, 1)
@@ -65,33 +69,31 @@ func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver)
 	return mux
 }
 
-func configuredHandler(logger *slog.Logger) (http.Handler, func()) {
+func configuredHandler(logger *slog.Logger) (http.Handler, func(), error) {
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		return handler(), func() {}
+		return handler(), func() {}, nil
 	}
 	database, err := sql.Open("pgx", databaseURL)
 	if err != nil {
-		logger.Error("database open failed", "error", err)
-		return handler(), func() {}
+		return handler(), func() {}, fmt.Errorf("open database: %w", err)
 	}
 	if err := postgres.Migrate(context.Background(), database); err != nil {
-		logger.Error("database migration failed", "error", err)
 		_ = database.Close()
-		return handler(), func() {}
+		return handler(), func() {}, fmt.Errorf("migrate database: %w", err)
 	}
 	actorID, actorErr := auth.NewActorID(env("RUNBRIDGE_ACTOR_ID", "service"))
 	actor, actorBuildErr := auth.NewActor(actorID, env("RUNBRIDGE_ACTOR_NAME", "RunBridge service"), auth.ActorKindHuman)
 	token := os.Getenv("RUNBRIDGE_API_TOKEN")
 	if actorErr != nil || actorBuildErr != nil || token == "" {
 		logger.Warn("audit API disabled: actor or token configuration is missing")
-		return handler(), func() { _ = database.Close() }
+		return handler(), func() { _ = database.Close() }, nil
 	}
 	authenticator, err := httpapi.NewStaticBearerAuthenticator(token, actor)
 	if err != nil {
-		return handler(), func() { _ = database.Close() }
+		return handler(), func() { _ = database.Close() }, fmt.Errorf("configure authenticator: %w", err)
 	}
-	return handlerWithAudit(postgres.NewStore(database), authenticator.Resolve), func() { _ = database.Close() }
+	return handlerWithAudit(postgres.NewStore(database), authenticator.Resolve), func() { _ = database.Close() }, nil
 }
 
 func env(key, fallback string) string {
