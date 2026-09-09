@@ -29,6 +29,24 @@ type Store struct {
 	db *sql.DB
 }
 
+type AuditRecord struct {
+	SequenceID       int64
+	ID               string
+	ProjectID        string
+	ProposalID       *string
+	ActorID          *string
+	ActorKind        string
+	EventType        string
+	ObjectType       *string
+	ObjectID         *string
+	CorrelationID    *string
+	SourceSystem     *string
+	SourceEventID    *string
+	SourceOccurredAt *time.Time
+	RecordedAt       time.Time
+	Metadata         json.RawMessage
+}
+
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 func (store *Store) CreateActor(ctx context.Context, actor auth.Actor) error {
@@ -344,6 +362,44 @@ func (store *Store) RecordAuditEvent(ctx context.Context, event audit.Event) err
         values ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
     `, event.ID, event.ProjectID, proposal, actor, event.ActorKind, event.Type, objectType, objectID, correlation, source, sourceID, event.SourceOccurredAt, event.RecordedAt, string(metadata))
 	return classify("record audit event", err)
+}
+
+// ListAuditEvents returns the append-only timeline for one project. The
+// project predicate is mandatory and the limit is bounded to keep a future
+// API endpoint from turning an audit query into an unbounded scan.
+func (store *Store) ListAuditEvents(ctx context.Context, projectID string, limit int) ([]AuditRecord, error) {
+	if strings.TrimSpace(projectID) == "" {
+		return nil, fmt.Errorf("list audit events: project is required: %w", ErrConflict)
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := store.db.QueryContext(ctx, `
+        select sequence_id, id, project_id, proposal_id, actor_id, actor_kind,
+               event_type, object_type, object_id, correlation_id,
+               source_system, source_event_id, source_occurred_at, recorded_at, metadata
+        from audit_events where project_id = $1 order by sequence_id asc limit $2
+    `, projectID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list audit events: %w", err)
+	}
+	defer rows.Close()
+	var records []AuditRecord
+	for rows.Next() {
+		var record AuditRecord
+		if err := rows.Scan(&record.SequenceID, &record.ID, &record.ProjectID, &record.ProposalID, &record.ActorID, &record.ActorKind, &record.EventType, &record.ObjectType, &record.ObjectID, &record.CorrelationID, &record.SourceSystem, &record.SourceEventID, &record.SourceOccurredAt, &record.RecordedAt, &record.Metadata); err != nil {
+			return nil, fmt.Errorf("scan audit event: %w", err)
+		}
+		record.Metadata = append(json.RawMessage(nil), record.Metadata...)
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read audit events: %w", err)
+	}
+	return records, nil
 }
 
 func nullableString(value *string) any {
