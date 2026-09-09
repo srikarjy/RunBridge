@@ -54,6 +54,32 @@ variable "database_url_parameter_arn" {
   type      = string
   sensitive = true
 }
+variable "api_token_parameter_arn" {
+  type        = string
+  sensitive   = true
+  description = "SSM SecureString ARN containing the RunBridge API token"
+}
+variable "webhook_secret_parameter_arn" {
+  type        = string
+  sensitive   = true
+  description = "SSM SecureString ARN containing the Seqera webhook secret"
+}
+variable "actor_id" {
+  type    = string
+  default = "runbridge-service"
+}
+variable "actor_name" {
+  type    = string
+  default = "RunBridge service"
+}
+variable "desired_count" {
+  type    = number
+  default = 1
+  validation {
+    condition     = var.desired_count > 0
+    error_message = "desired_count must be positive."
+  }
+}
 variable "cpu" {
   type    = number
   default = 512

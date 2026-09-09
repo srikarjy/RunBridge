@@ -31,7 +31,13 @@ resource "aws_ecs_task_definition" "runbridge" {
     portMappings = [{ containerPort = 8080, hostPort = 8080, protocol = "tcp" }]
     secrets = [
       { name = "DATABASE_URL", valueFrom = var.database_url_parameter_arn },
-      { name = "SEQERA_TOKEN", valueFrom = var.seqera_token_parameter_arn }
+      { name = "SEQERA_TOKEN", valueFrom = var.seqera_token_parameter_arn },
+      { name = "RUNBRIDGE_API_TOKEN", valueFrom = var.api_token_parameter_arn },
+      { name = "RUNBRIDGE_WEBHOOK_SECRET", valueFrom = var.webhook_secret_parameter_arn }
+    ]
+    environment = [
+      { name = "RUNBRIDGE_ACTOR_ID", value = var.actor_id },
+      { name = "RUNBRIDGE_ACTOR_NAME", value = var.actor_name }
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -55,7 +61,7 @@ resource "aws_ecs_service" "runbridge" {
   name                              = var.name
   cluster                           = var.cluster_arn
   task_definition                   = aws_ecs_task_definition.runbridge.arn
-  desired_count                     = 1
+  desired_count                     = var.desired_count
   launch_type                       = "FARGATE"
   health_check_grace_period_seconds = 30
 

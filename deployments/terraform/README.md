@@ -8,8 +8,10 @@ private subnets, security groups, IAM roles, and SSM Parameter Store entries.
 Those shared resources are inputs so this repository does not create a public
 network or invent production credentials.
 
-The task injects `DATABASE_URL` and `SEQERA_TOKEN` from SSM Parameter Store,
-writes structured container logs to CloudWatch, and uses a `/healthz` check.
+The task injects `DATABASE_URL`, `SEQERA_TOKEN`, `RUNBRIDGE_API_TOKEN`, and
+`RUNBRIDGE_WEBHOOK_SECRET` from SSM Parameter Store, sets the service actor
+identity, writes structured container logs to CloudWatch, and uses a
+`/healthz` check. `desired_count` controls the Fargate service size.
 The configuration also creates an immutable, scan-on-push ECR repository with a
 small untagged-image lifecycle policy.
 Use an immutable image digest in production. Database migrations, TLS ingress,
