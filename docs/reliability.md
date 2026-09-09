@@ -58,6 +58,8 @@ Matching must consider project/external workspace, attempt correlation, and exec
 
 The reconciliation foundation encodes this conservatively: one match can be adopted, multiple matches require manual review, and an empty result remains unknown unless definitive nonacceptance is proven. A worker must persist observations and its decision before applying the local transition.
 
+Webhook authentication should verify the raw request body before parsing it. The security foundation uses an HMAC-SHA256 signature over a timestamp and body, compares signatures in constant time, and rejects timestamps outside a configured replay window. The concrete header format and secret rotation policy remain integration-specific.
+
 ## Crash recovery
 
 | Crash point | Required recovery behavior |
