@@ -17,6 +17,24 @@ var (
 	ErrTerminalState     = errors.New("execution is terminal")
 )
 
+type AttemptStatus string
+
+const (
+	AttemptPending  AttemptStatus = "pending"
+	AttemptAccepted AttemptStatus = "accepted"
+	AttemptUnknown  AttemptStatus = "unknown"
+	AttemptFailed   AttemptStatus = "failed"
+)
+
+func (status AttemptStatus) Valid() bool {
+	switch status {
+	case AttemptPending, AttemptAccepted, AttemptUnknown, AttemptFailed:
+		return true
+	default:
+		return false
+	}
+}
+
 type Source string
 
 const (

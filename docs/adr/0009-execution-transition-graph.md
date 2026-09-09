@@ -8,7 +8,7 @@ Accepted for Phase 9 foundation.
 
 The execution domain owns a small explicit transition graph for `APPROVED`, `SUBMITTING`, `SUBMISSION_UNKNOWN`, `RUNNING`, and terminal outcomes. Same-state observations are idempotent. Terminal states cannot move again, and unknown Seqera status strings are errors rather than guessed mappings.
 
-The eventual coordinator must persist transitions with an expected current state/version and write the corresponding audit event in the same database transaction. The transition package does not perform SQL or call Seqera.
+The coordinator persists transitions with an expected current state/version and records uniquely correlated submission attempts. The transition package does not perform SQL or call Seqera; the eventual coordinator must write each transition and its audit event in one database transaction.
 
 ## Rationale
 
@@ -17,4 +17,3 @@ An explicit graph makes invalid lifecycle changes visible before they reach Post
 ## Consequences
 
 This is a foundation, not the durable coordinator. Conditional updates, attempt records, idempotency keys, crash recovery, retry classification, cancellation races, and reconciliation are still required before live submissions are safe.
-

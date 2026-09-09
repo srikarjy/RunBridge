@@ -76,7 +76,7 @@ Build only the client operations required to submit rnaseq, retrieve state, reso
 
 ## Phase 9 — Durable Execution State Machine
 
-**Status: in progress.** The execution package now validates the legal transition graph, protects terminal states, treats repeated observations as idempotent, and rejects unknown external statuses. The remaining work is transactional persistence, attempt claiming, conditional updates, retry classification, and restart recovery.
+**Status: in progress.** The execution package now validates the legal transition graph, protects terminal states, treats repeated observations as idempotent, and rejects unknown external statuses. PostgreSQL now persists executions with conditional transitions and records uniquely correlated submission attempts. The remaining work is transactional attempt claiming, retry classification, and restart recovery.
 
 Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcomes, and SUBMISSION_UNKNOWN, refining conceptual names as necessary. Introduce transactionally claimed attempts, idempotency, conditional updates, retry classification, and crash recovery. Keep cancellation intent distinct from confirmed cancellation.
 

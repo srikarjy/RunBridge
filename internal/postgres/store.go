@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -230,6 +231,45 @@ func (store *Store) TransitionExecution(ctx context.Context, id string, expected
 	}
 	if rows == 0 {
 		return fmt.Errorf("transition execution: expected %s for %s: %w", expected, id, ErrConflict)
+	}
+	return nil
+}
+
+// CreateAttempt records one transport attempt. The database uniqueness rules
+// make attempt numbers and correlation IDs safe against concurrent retries.
+func (store *Store) CreateAttempt(ctx context.Context, id, executionID, correlationID string, number int64, startedAt time.Time) error {
+	if strings.TrimSpace(id) == "" || strings.TrimSpace(executionID) == "" || strings.TrimSpace(correlationID) == "" || number <= 0 || startedAt.IsZero() {
+		return fmt.Errorf("create execution attempt: invalid identity or timestamp: %w", ErrConflict)
+	}
+	_, err := store.db.ExecContext(ctx, `
+        insert into execution_attempts (id, execution_id, attempt_number, correlation_id, status, started_at)
+        values ($1, $2, $3, $4, 'pending', $5)
+    `, id, executionID, number, correlationID, startedAt)
+	return classify("create execution attempt", err)
+}
+
+// ResolveAttempt closes a pending/unknown attempt exactly once. A repeated
+// resolution is reported as a conflict so callers cannot silently rewrite
+// evidence used by reconciliation.
+func (store *Store) ResolveAttempt(ctx context.Context, executionID string, number int64, status execution.AttemptStatus, errorCategory *string, resolvedAt time.Time) error {
+	if strings.TrimSpace(executionID) == "" || number <= 0 || !status.Valid() || status == execution.AttemptPending || resolvedAt.IsZero() {
+		return fmt.Errorf("resolve execution attempt: invalid resolution: %w", ErrConflict)
+	}
+	result, err := store.db.ExecContext(ctx, `
+        update execution_attempts
+        set status = $1, last_error_category = $2, resolved_at = $3
+        where execution_id = $4 and attempt_number = $5
+          and status in ('pending', 'unknown') and resolved_at is null
+    `, status, nullableString(errorCategory), resolvedAt, executionID, number)
+	if err != nil {
+		return classify("resolve execution attempt", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("resolve execution attempt: rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("resolve execution attempt: no unresolved attempt %d for %s: %w", number, executionID, ErrConflict)
 	}
 	return nil
 }
