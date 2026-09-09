@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, and semantic Run Diff are implemented through Phase 6. API credential authentication, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, and policy-bound approval decisions are implemented through Phase 7. API credential authentication, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -46,7 +46,7 @@ Run Diff compares validated normalized rnaseq specifications and emits categoriz
 
 ## Policy / approval layer
 
-Simple deterministic code/config rules will combine authorization, workflow allowlists, resource limits, preflight, and Run Diff to allow, deny, or require review. Save policy version and reasons. Reviewers approve a specific immutable specification and its review context, not a proposal's latest pointer. No-review decisions still need durable authorization evidence. Changes or stale evidence require re-evaluation. See [approval model](approval-model.md).
+The initial deterministic policy denies failed preflight, requires review for first runs or non-empty Run Diff, and records explicit policy approval for unchanged passing runs. Approval decisions bind to one immutable specification and copied review context, not a proposal's latest pointer. No-review decisions still need durable authorization evidence. Changes or stale evidence require re-evaluation. Reviewer authorization remains a server-side application concern. See [approval model](approval-model.md).
 
 ## Execution layer
 

@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/srikarjy/RunBridge/internal/approvals"
 	"github.com/srikarjy/RunBridge/internal/auth"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/runs"
@@ -157,6 +159,30 @@ func (store *Store) AddSpecification(ctx context.Context, projectID projects.Pro
 		return fmt.Errorf("add specification: commit: %w", err)
 	}
 	return nil
+}
+
+// CreateApproval persists the immutable decision and the review context that
+// produced it. The approved specification itself is referenced by ID; it is
+// never copied from the latest proposal pointer.
+func (store *Store) CreateApproval(ctx context.Context, approval approvals.Approval) error {
+	contextBytes, err := json.Marshal(approval.ReviewContext())
+	if err != nil {
+		return fmt.Errorf("create approval: marshal review context: %w", err)
+	}
+	var reviewer any
+	if reviewerID, ok := approval.Reviewer(); ok {
+		reviewer = reviewerID.String()
+	}
+	_, err = store.db.ExecContext(ctx, `
+        insert into approvals (
+            id, project_id, proposal_id, specification_id, reviewer_id,
+            decision, policy_version, review_context, decided_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+    `,
+		approval.ID().String(), approval.ProjectID().String(), approval.ProposalID().String(), approval.SpecificationID().String(),
+		reviewer, approval.Decision(), approval.PolicyVersion(), string(contextBytes), approval.DecidedAt(),
+	)
+	return classify("create approval", err)
 }
 
 func (store *Store) GetProposal(ctx context.Context, projectID projects.ProjectID, proposalID runs.ProposalID) (runs.Proposal, error) {

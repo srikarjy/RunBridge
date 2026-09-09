@@ -1,6 +1,6 @@
 # Approval model
 
-Stage 1 design only. **Approve immutable intent, not mutable UI state.**
+The approval domain and deterministic policy foundation are implemented in Phase 7; transport orchestration, reviewer authentication, freshness policy, and external execution remain future work. **Approve immutable intent, not mutable UI state.**
 
 ## Approval target
 

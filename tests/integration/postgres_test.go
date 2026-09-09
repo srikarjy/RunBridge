@@ -10,10 +10,14 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/srikarjy/RunBridge/internal/approvals"
 	"github.com/srikarjy/RunBridge/internal/auth"
 	"github.com/srikarjy/RunBridge/internal/authorization"
+	"github.com/srikarjy/RunBridge/internal/policy"
 	"github.com/srikarjy/RunBridge/internal/postgres"
+	"github.com/srikarjy/RunBridge/internal/preflight"
 	"github.com/srikarjy/RunBridge/internal/projects"
+	"github.com/srikarjy/RunBridge/internal/rundiff"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
@@ -82,6 +86,25 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got := string(loaded.LatestSpecification().Configuration().Document()); got != `{"memory":"64 GB"}` {
 		t.Fatalf("normalized bytes = %q", got)
+	}
+	current := loaded.LatestSpecification()
+	preflightResult := preflight.Result{Checks: []preflight.CheckResult{{Code: "ok", Status: preflight.StatusPass}}}
+	diffResult := rundiff.Result{ProposedSpecificationID: current.ID(), Changes: []rundiff.Change{}}
+	evaluation := policy.Evaluate(preflightResult, diffResult)
+	approvalID, _ := approvals.NewApprovalID("approval-1")
+	approval, err := approvals.Decide(approvalID, loaded, current, evaluation, approvals.ReviewContext{Preflight: preflightResult, Diff: diffResult}, "", false, true, time.Unix(4, 0).UTC())
+	if err != nil {
+		t.Fatalf("build policy approval: %v", err)
+	}
+	if err := store.CreateApproval(ctx, approval); err != nil {
+		t.Fatalf("create approval: %v", err)
+	}
+	var decision, storedSpecificationID string
+	if err := db.QueryRowContext(ctx, `select decision, specification_id from approvals where id = $1`, approvalID.String()).Scan(&decision, &storedSpecificationID); err != nil {
+		t.Fatalf("read approval: %v", err)
+	}
+	if decision != string(approvals.DecisionPolicyApproved) || storedSpecificationID != current.ID().String() {
+		t.Fatalf("stored approval = %s/%s", decision, storedSpecificationID)
 	}
 
 	wrongProjectID, _ := projects.NewProjectID("project-2")

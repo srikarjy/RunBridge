@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 6 — Run Diff.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, and semantic Run Diff. No HTTP authentication adapter, API, Seqera integration, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 7 — approval workflow.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, and immutable policy-bound approval decisions. No HTTP authentication adapter, API, Seqera integration, execution lifecycle, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -141,7 +141,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures. A small `pgx`-backed store persists current actors, projects, memberships, proposals, and revisions. There is no runtime command.
+**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. `internal/policy` makes deterministic allow/review/deny decisions, and `internal/approvals` binds those decisions to exact specification revisions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures; the store persists approval records as well as current aggregates. There is no runtime command.
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
@@ -160,7 +160,6 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `internal/runs/rnaseq/` | nf-core/rnaseq request validation and deterministic normalization |
 | `internal/preflight/` | Structured deterministic readiness checks |
 | `internal/rundiff/` | Semantic comparison of normalized rnaseq specifications |
-| `internal/preflight/`, `internal/rundiff/` | Deterministic validation and semantic comparisons |
 | `internal/policy/`, `internal/approvals/` | Rules, reviewer decisions, and immutable approval targets |
 | `internal/execution/` | Durable coordination, retries, cancellation, and reconciliation |
 | `internal/postgres/` | Embedded PostgreSQL migrations and persistence adapters |
@@ -174,7 +173,7 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 6 — Run Diff.** The first workflow-specific specification now has a deterministic semantic diff for workflow revisions, samples, references, parameters, resources, and execution profile. Policy evaluation, API authentication, approval, and workflow execution remain future work.
+**Phase 7 — approval workflow.** Deterministic policy now denies failed preflight, requires human review for first runs or changes, and records policy approval for unchanged passing runs. Approval decisions bind to exact immutable specification revisions. API authentication, Seqera integration, and workflow execution remain future work.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 
