@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, and deterministic preflight checks are implemented through Phase 5. API credential authentication, Run Diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, and semantic Run Diff are implemented through Phase 6. API credential authentication, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -42,7 +42,7 @@ Preflight performs deterministic structural and configuration checks for the sup
 
 ## Run Diff layer
 
-Run Diff will compare normalized specifications and emit categorized, structured changes in workflow revision, inputs, sample metadata, references, parameters, resources, and execution environment. Human rendering must derive from this structured result. Baseline identity and normalization version are part of the comparison evidence. A missing baseline is an explicit first-run condition, not an empty diff or implicit authorization. Preserve order where meaningful and distinguish unknown, absent, and explicitly supplied values.
+Run Diff compares validated normalized rnaseq specifications and emits categorized, structured changes in workflow revision, inputs, sample metadata, references, parameters, resources, and execution environment. Human rendering must derive from this structured result. Baseline and proposed specification identities are part of the comparison evidence. A missing baseline is an explicit first-run condition, not an empty diff or implicit authorization. Baseline lookup and access checks belong to the application layer and must use project authorization. Preserve order where meaningful and distinguish unknown, absent, and explicitly supplied values.
 
 ## Policy / approval layer
 

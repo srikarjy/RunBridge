@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 5 — deterministic preflight.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, and structured preflight checks. No HTTP authentication adapter, API, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 6 — Run Diff.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, and semantic Run Diff. No HTTP authentication adapter, API, Seqera integration, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -34,13 +34,13 @@ The flow describes the review experience, not independent unguarded API calls. B
 
 ## Run Diff
 
-**Run Diff is a first-class planned feature.** It will compare a proposal with a previous run, project baseline, approved configuration, or another accessible specification.
+**Run Diff is a first-class feature.** It compares normalized specifications against a previous run, project baseline, approved configuration, or another accessible specification.
 
 Meaningful differences include workflow revision, parameters, samples and input references, reference genome, requested CPUs and memory, containers, and execution configuration. A reference genome is the reference sequence used to interpret the input data; changing it can change the interpretation of an analysis.
 
-Comparing JSON strings cannot reliably distinguish formatting changes from scientific or resource changes. RunBridge will normalize supported fields, preserve meaningful distinctions, and produce structured differences that can drive both human review and deterministic policy. Missing values, explicit defaults, units, and order-sensitive fields need defined comparison semantics. Unknown fields must not silently disappear.
+Comparing JSON strings cannot reliably distinguish formatting changes from scientific or resource changes. RunBridge normalizes supported fields, preserves meaningful distinctions, and produces structured differences that can drive both human review and deterministic policy. Missing values, explicit defaults, units, and order-sensitive fields need defined comparison semantics. Unknown fields must not silently disappear.
 
-Run Diff is not implemented. See [architecture](docs/architecture.md) and [Phase 6](ROADMAP.md#phase-6--run-diff).
+Run Diff is implemented for normalized nf-core/rnaseq specifications as a deterministic domain package. See [architecture](docs/architecture.md), [ADR-0006](docs/adr/0006-semantic-run-diff.md), and [Phase 6](ROADMAP.md#phase-6--run-diff). Baseline lookup and access checks remain application-layer responsibilities.
 
 ## Preflight
 
@@ -159,6 +159,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `internal/runs/` | Proposals, specification revisions, normalization, and domain invariants |
 | `internal/runs/rnaseq/` | nf-core/rnaseq request validation and deterministic normalization |
 | `internal/preflight/` | Structured deterministic readiness checks |
+| `internal/rundiff/` | Semantic comparison of normalized rnaseq specifications |
 | `internal/preflight/`, `internal/rundiff/` | Deterministic validation and semantic comparisons |
 | `internal/policy/`, `internal/approvals/` | Rules, reviewer decisions, and immutable approval targets |
 | `internal/execution/` | Durable coordination, retries, cancellation, and reconciliation |
@@ -173,7 +174,7 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 5 — deterministic preflight.** The first workflow-specific specification now has structured checks for canonical configuration, project authorization, and configured sample/resource boundaries. Run Diff, policy evaluation, API authentication, approval, and workflow execution remain future work.
+**Phase 6 — Run Diff.** The first workflow-specific specification now has a deterministic semantic diff for workflow revisions, samples, references, parameters, resources, and execution profile. Policy evaluation, API authentication, approval, and workflow execution remain future work.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 

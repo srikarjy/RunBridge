@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 5 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 6 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -51,6 +51,8 @@ Implement structured deterministic checks for required inputs, sample metadata s
 **Completion gate:** representative valid/invalid specifications yield stable field-specific results; failed required checks cannot advance to execution eligibility.
 
 ## Phase 6 — Run Diff
+
+**Complete.**
 
 Compare a selected accessible baseline, previous run, approved configuration, or another specification with the proposal. Produce structured changes categorized by workflow, revision, inputs, samples, parameters, resources, references, and execution environment. Bind results to both revision identities and normalization version. Represent the no-baseline condition explicitly.
 
