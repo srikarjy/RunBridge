@@ -145,7 +145,9 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
-**Observability foundation:** `internal/observability` provides request/run correlation IDs, standard-library structured logger enrichment, atomic reliability counters, and Prometheus-compatible export from the service. **Remaining engineering:** full request middleware, useful tracing, dashboards, and live deployment. `deployments/terraform/` contains an ECS Fargate task/service foundation; it is not a claim of a live production environment.
+**Observability foundation:** `internal/observability` provides server-owned request correlation IDs, structured completion logging, run correlation primitives, atomic reliability counters, and Prometheus-compatible export from the service. **Remaining engineering:** useful tracing, dashboards, and live deployment. `deployments/terraform/` contains an ECS Fargate task/service foundation; it is not a claim of a live production environment.
+
+**Security foundation:** bearer-token authentication protects configured project APIs, webhook requests use timestamped HMAC-SHA256 verification with replay limits, request bodies are bounded at the webhook boundary, and global responses include conservative browser/security headers. Production identity, secret rotation, TLS ingress, and least-privilege cloud policies remain deployment concerns.
 
 **Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes, canonical artifact manifests, approval receipts, and execution receipts. **Later hardening:** chained audit hashes and AWS KMS signing after the execution path is reliable.
 

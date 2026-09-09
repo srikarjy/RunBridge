@@ -87,7 +87,7 @@ func handlerWithDependencies(store *postgres.Store, resolver httpapi.PrincipalRe
 	if webhook != nil {
 		mux.Handle("POST /webhooks/seqera", webhook)
 	}
-	return mux
+	return security.Headers(observability.Middleware(mux, slog.Default()))
 }
 
 func configuredHandler(logger *slog.Logger) (http.Handler, func(), error) {
