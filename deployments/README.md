@@ -1,6 +1,10 @@
 # Deployment direction
 
-Stage 1 has no deployable application or infrastructure. The intended first deployment is a Go service packaged with Docker, PostgreSQL, and securely supplied Seqera credentials on AWS. Nextflow execution remains the responsibility of the configured Seqera execution environment.
+The repository now includes a reviewable Terraform foundation under
+`deployments/terraform/` for a Go service packaged with Docker and deployed to
+AWS ECS Fargate. It expects existing networking, IAM roles, an ECS cluster, and
+SSM Parameter Store references for PostgreSQL and Seqera credentials. Nextflow
+execution remains the responsibility of the configured Seqera environment.
 
 Choose an appropriately sized application service and PostgreSQL deployment once runtime needs are known. Do not introduce Kubernetes, a custom scheduler, or speculative infrastructure. Background coordination may initially share the application deployment while PostgreSQL retains durable work state.
 
