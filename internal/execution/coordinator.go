@@ -16,6 +16,10 @@ type AttemptStarter interface {
 	CreateAttempt(ctx context.Context, id, executionID, correlationID string, number int64, startedAt time.Time) error
 }
 
+type AtomicClaimer interface {
+	ClaimSubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error
+}
+
 type StateWriter interface {
 	TransitionExecution(ctx context.Context, id string, expected, next runs.Status, externalWorkspaceID, externalExecutionID *string) error
 }
@@ -50,14 +54,20 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 	if coordinator == nil || coordinator.attempts == nil || coordinator.states == nil || coordinator.launcher == nil {
 		return "", "", errors.New("execution coordinator is not configured")
 	}
-	if err := coordinator.attempts.CreateAttempt(ctx, attemptID, executionID, correlationID, attemptNumber, startedAt); err != nil {
-		return "", "", fmt.Errorf("create submission attempt: %w", err)
-	}
-	if err := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusApproved, runs.StatusSubmitting, nil, nil); err != nil {
-		if coordinator.metrics != nil {
-			coordinator.metrics.TransitionConflicts.Add(1)
+	if claimer, ok := coordinator.attempts.(AtomicClaimer); ok {
+		if err := claimer.ClaimSubmission(ctx, executionID, attemptID, correlationID, attemptNumber, startedAt); err != nil {
+			return "", "", fmt.Errorf("claim execution submission: %w", err)
 		}
-		return "", "", fmt.Errorf("claim execution submission: %w", err)
+	} else {
+		if err := coordinator.attempts.CreateAttempt(ctx, attemptID, executionID, correlationID, attemptNumber, startedAt); err != nil {
+			return "", "", fmt.Errorf("create submission attempt: %w", err)
+		}
+		if err := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusApproved, runs.StatusSubmitting, nil, nil); err != nil {
+			if coordinator.metrics != nil {
+				coordinator.metrics.TransitionConflicts.Add(1)
+			}
+			return "", "", fmt.Errorf("claim execution submission: %w", err)
+		}
 	}
 	response, err := coordinator.launcher.Submit(ctx, request)
 	if err != nil {

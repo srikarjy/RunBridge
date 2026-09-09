@@ -281,6 +281,38 @@ func (store *Store) CreateAttempt(ctx context.Context, id, executionID, correlat
 	return classify("create execution attempt", err)
 }
 
+// ClaimSubmission atomically creates the first pending attempt and claims the
+// approved execution for submission. This is the transaction boundary that
+// prevents concurrent workers from launching the same intent twice.
+func (store *Store) ClaimSubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error {
+	if strings.TrimSpace(executionID) == "" || strings.TrimSpace(attemptID) == "" || strings.TrimSpace(correlationID) == "" || number <= 0 || startedAt.IsZero() {
+		return fmt.Errorf("claim submission: invalid attempt: %w", ErrConflict)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("claim submission: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `insert into execution_attempts (id, execution_id, attempt_number, correlation_id, status, started_at) values ($1, $2, $3, $4, 'pending', $5)`, attemptID, executionID, number, correlationID, startedAt); err != nil {
+		return classify("claim submission attempt", err)
+	}
+	result, err := tx.ExecContext(ctx, `update executions set status = 'SUBMITTING', updated_at = $1 where id = $2 and status = 'APPROVED'`, startedAt, executionID)
+	if err != nil {
+		return classify("claim submission execution", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("claim submission: rows affected: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("claim submission: execution is not APPROVED: %w", ErrConflict)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("claim submission: commit: %w", err)
+	}
+	return nil
+}
+
 // ResolveAttempt closes a pending/unknown attempt exactly once. A repeated
 // resolution is reported as a conflict so callers cannot silently rewrite
 // evidence used by reconciliation.
