@@ -22,3 +22,11 @@ func TestMetricsEndpoint(t *testing.T) {
 		t.Fatalf("metrics response: %d %q", recorder.Code, recorder.Body.String())
 	}
 }
+
+func TestReadinessRequiresPersistence(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readiness status: %d", recorder.Code)
+	}
+}

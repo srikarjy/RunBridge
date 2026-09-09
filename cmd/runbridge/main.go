@@ -58,6 +58,16 @@ func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver)
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{"status":"ok"}`))
 	})
+	mux.HandleFunc("GET /readyz", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		if store == nil {
+			writer.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = writer.Write([]byte(`{"status":"not_ready"}`))
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write([]byte(`{"status":"ready"}`))
+	})
 	mux.HandleFunc("GET /metrics", func(writer http.ResponseWriter, _ *http.Request) {
 		snapshot := metrics.Snapshot()
 		writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
