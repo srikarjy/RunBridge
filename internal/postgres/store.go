@@ -414,6 +414,10 @@ func (store *Store) RecordAuditEvent(ctx context.Context, event audit.Event) err
 // project predicate is mandatory and the limit is bounded to keep a future
 // API endpoint from turning an audit query into an unbounded scan.
 func (store *Store) ListAuditEvents(ctx context.Context, projectID string, limit int) ([]AuditRecord, error) {
+	return store.ListAuditEventsAfter(ctx, projectID, 0, limit)
+}
+
+func (store *Store) ListAuditEventsAfter(ctx context.Context, projectID string, afterSequenceID int64, limit int) ([]AuditRecord, error) {
 	if strings.TrimSpace(projectID) == "" {
 		return nil, fmt.Errorf("list audit events: project is required: %w", ErrConflict)
 	}
@@ -427,8 +431,8 @@ func (store *Store) ListAuditEvents(ctx context.Context, projectID string, limit
         select sequence_id, id, project_id, proposal_id, actor_id, actor_kind,
                event_type, object_type, object_id, correlation_id,
                source_system, source_event_id, source_occurred_at, recorded_at, metadata
-        from audit_events where project_id = $1 order by sequence_id asc limit $2
-    `, projectID, limit)
+		from audit_events where project_id = $1 and sequence_id > $2 order by sequence_id asc limit $3
+	`, projectID, afterSequenceID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list audit events: %w", err)
 	}
