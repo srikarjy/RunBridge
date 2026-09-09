@@ -20,6 +20,7 @@ const (
 )
 
 var ErrMultipleMatches = errors.New("multiple external executions match submission")
+var ErrRetryLimit = errors.New("submission retry limit reached")
 
 type Decision struct {
 	Kind       DecisionKind
@@ -40,4 +41,14 @@ func Decide(observations []Observation, definitiveFailure bool) Decision {
 	default:
 		return Decision{Kind: ManualReview}
 	}
+}
+
+func CanRetry(attemptNumber, maxAttempts int64, definitiveFailure bool) error {
+	if !definitiveFailure {
+		return ErrRetryLimit
+	}
+	if attemptNumber <= 0 || maxAttempts <= 0 || attemptNumber >= maxAttempts {
+		return ErrRetryLimit
+	}
+	return nil
 }

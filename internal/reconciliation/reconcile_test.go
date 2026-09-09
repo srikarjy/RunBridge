@@ -16,3 +16,15 @@ func TestDecideConservatively(t *testing.T) {
 		t.Fatalf("multiple matches: %#v", got)
 	}
 }
+
+func TestRetryPolicyIsBounded(t *testing.T) {
+	if err := CanRetry(1, 3, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := CanRetry(3, 3, true); err == nil {
+		t.Fatal("retry limit ignored")
+	}
+	if err := CanRetry(1, 3, false); err == nil {
+		t.Fatal("uncertain result allowed blind retry")
+	}
+}
