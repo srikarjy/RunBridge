@@ -13,6 +13,22 @@ func TestHealthEndpoint(t *testing.T) {
 	if recorder.Code != http.StatusOK || recorder.Body.String() != `{"status":"ok"}` {
 		t.Fatalf("health response: %d %q", recorder.Code, recorder.Body.String())
 	}
+	if recorder.Header().Get("X-Request-ID") == "" || recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("security/correlation headers: %#v", recorder.Header())
+	}
+}
+
+func TestConfiguredWebhookRouteIsMounted(t *testing.T) {
+	called := false
+	webhook := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		called = true
+		writer.WriteHeader(http.StatusNoContent)
+	})
+	recorder := httptest.NewRecorder()
+	handlerWithDependencies(nil, nil, webhook).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/webhooks/seqera", strings.NewReader(`{}`)))
+	if recorder.Code != http.StatusNoContent || !called {
+		t.Fatalf("webhook route: status=%d called=%v", recorder.Code, called)
+	}
 }
 
 func TestMetricsEndpoint(t *testing.T) {
