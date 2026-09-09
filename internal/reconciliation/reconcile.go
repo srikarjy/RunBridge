@@ -6,8 +6,20 @@ package reconciliation
 import "errors"
 
 type Observation struct {
-	ExternalID string
-	Status     string
+	ExternalID    string
+	Status        string
+	WorkspaceID   string
+	CorrelationID string
+}
+
+func FindMatches(observations []Observation, workspaceID, correlationID string) []Observation {
+	var matches []Observation
+	for _, observation := range observations {
+		if observation.ExternalID != "" && observation.WorkspaceID == workspaceID && observation.CorrelationID == correlationID {
+			matches = append(matches, observation)
+		}
+	}
+	return matches
 }
 
 type DecisionKind string

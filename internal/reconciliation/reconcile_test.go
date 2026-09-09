@@ -28,3 +28,11 @@ func TestRetryPolicyIsBounded(t *testing.T) {
 		t.Fatal("uncertain result allowed blind retry")
 	}
 }
+
+func TestFindMatchesUsesStableCorrelation(t *testing.T) {
+	observations := []Observation{{ExternalID: "wf-1", WorkspaceID: "ws-1", CorrelationID: "corr-1"}, {ExternalID: "wf-2", WorkspaceID: "ws-1", CorrelationID: "other"}}
+	matches := FindMatches(observations, "ws-1", "corr-1")
+	if len(matches) != 1 || matches[0].ExternalID != "wf-1" {
+		t.Fatalf("matches: %#v", matches)
+	}
+}
