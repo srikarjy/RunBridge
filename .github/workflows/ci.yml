@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify Go formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Run tests with race detector
+        run: go test -race ./...
+      - name: Run vet
+        run: go vet ./...
+      - uses: hashicorp/setup-terraform@v3
+      - name: Verify Terraform formatting
+        run: terraform fmt -check -recursive deployments/terraform
