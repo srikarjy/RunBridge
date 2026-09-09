@@ -402,6 +402,52 @@ func (store *Store) ListAuditEvents(ctx context.Context, projectID string, limit
 	return records, nil
 }
 
+// ApplyExternalEvent atomically appends an external event and advances its
+// matching execution. The caller supplies the observed local state so the
+// conditional update protects against concurrent workers.
+func (store *Store) ApplyExternalEvent(ctx context.Context, event events.Event, projectID, executionID string, current runs.Status, currentOccurredAt time.Time, recordedAt time.Time) (events.Decision, error) {
+	decision, err := events.Transition(current, currentOccurredAt, event)
+	if err != nil || decision != events.Apply {
+		return decision, err
+	}
+	if strings.TrimSpace(projectID) == "" || strings.TrimSpace(executionID) == "" {
+		return events.Conflict, fmt.Errorf("apply external event: project and execution are required: %w", ErrConflict)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return events.Conflict, fmt.Errorf("apply external event: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	metadata := []byte(`{}`)
+	_, err = tx.ExecContext(ctx, `
+        insert into audit_events (id, schema_version, project_id, actor_kind, event_type,
+            object_type, object_id, source_system, source_event_id, source_occurred_at,
+            recorded_at, metadata)
+        values ($1, 1, $2, 'external', 'execution.state_changed', 'execution', $3, $4, $5, $6, $7, $8::jsonb)
+    `, event.ID, projectID, executionID, event.Source, event.ID, event.OccurredAt, recordedAt, string(metadata))
+	if err != nil {
+		return events.Conflict, classify("apply external event: record", err)
+	}
+	result, err := tx.ExecContext(ctx, `
+        update executions set status = $1, external_execution_id = $2, updated_at = $3
+        where id = $4 and project_id = $5 and status = $6
+    `, event.Status, event.ExternalExecutionID, recordedAt, executionID, projectID, current)
+	if err != nil {
+		return events.Conflict, classify("apply external event: transition", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return events.Conflict, fmt.Errorf("apply external event: rows affected: %w", err)
+	}
+	if rows != 1 {
+		return events.Conflict, fmt.Errorf("apply external event: stale execution state: %w", ErrConflict)
+	}
+	if err := tx.Commit(); err != nil {
+		return events.Conflict, fmt.Errorf("apply external event: commit: %w", err)
+	}
+	return events.Apply, nil
+}
+
 func nullableString(value *string) any {
 	if value == nil {
 		return nil
