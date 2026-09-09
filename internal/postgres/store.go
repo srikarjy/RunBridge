@@ -60,6 +60,34 @@ func (store *Store) CreateProject(ctx context.Context, project projects.Project,
 	return nil
 }
 
+func (store *Store) AddMembership(ctx context.Context, membership projects.Membership) error {
+	_, err := store.db.ExecContext(ctx, `
+        insert into project_memberships (project_id, actor_id, role)
+        values ($1, $2, $3)
+    `, membership.ProjectID().String(), membership.ActorID().String(), membership.Role())
+	return classify("add project membership", err)
+}
+
+func (store *Store) MembershipFor(ctx context.Context, projectID projects.ProjectID, actorID auth.ActorID) (projects.Membership, error) {
+	var role projects.Role
+	err := store.db.QueryRowContext(ctx, `
+        select role
+        from project_memberships
+        where project_id = $1 and actor_id = $2
+    `, projectID.String(), actorID.String()).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return projects.Membership{}, fmt.Errorf("get project membership: %w: %w", ErrNotFound, projects.ErrMembershipNotFound)
+	}
+	if err != nil {
+		return projects.Membership{}, fmt.Errorf("get project membership: %w", err)
+	}
+	membership, err := projects.NewMembership(projectID, actorID, role)
+	if err != nil {
+		return projects.Membership{}, fmt.Errorf("rebuild project membership: %w", err)
+	}
+	return membership, nil
+}
+
 // CreateProposal stores a proposal and all of its immutable revisions in one
 // short transaction.
 func (store *Store) CreateProposal(ctx context.Context, proposal runs.Proposal) error {

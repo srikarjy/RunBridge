@@ -11,6 +11,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/srikarjy/RunBridge/internal/auth"
+	"github.com/srikarjy/RunBridge/internal/authorization"
 	"github.com/srikarjy/RunBridge/internal/postgres"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/runs"
@@ -58,6 +59,9 @@ func TestPostgresPersistence(t *testing.T) {
 	membership, _ := projects.NewMembership(projectID, actorID, projects.RoleRunner)
 	if err := store.CreateProject(ctx, project, membership); err != nil {
 		t.Fatalf("create project: %v", err)
+	}
+	if err := authorization.NewAuthorizer(store).Authorize(ctx, actor, projectID, authorization.PermissionRunPropose); err != nil {
+		t.Fatalf("authorize project runner: %v", err)
 	}
 
 	proposal := newProposal(t, projectID, actorID)

@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 2 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 3 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -27,6 +27,8 @@ Introduce migrations and persistence for projects, memberships, proposals, speci
 **Completion gate:** integration checks verify migrations, durable reads after restart, project-scoped references, rollback behavior, and concurrent mutation constraints.
 
 ## Phase 3 — Authentication + Project Authorization
+
+**Complete for the domain authorization boundary.** HTTP credential authentication and identity-provider integration remain transport work for the future API.
 
 Choose the minimum appropriate authentication mechanism. Enforce server-side project membership and permissions for commands and queries. Consider viewer, runner, reviewer, and admin roles; settle exact grants and reviewer separation rules during implementation. Avoid building a new identity platform.
 

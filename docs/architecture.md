@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model and PostgreSQL persistence foundation are implemented through Phase 2. API, authorization, workflow-specific validation/diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, and domain authorization boundary are implemented through Phase 3. API credential authentication, workflow-specific validation/diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -34,7 +34,7 @@ The run domain will own proposals, versioned specifications, workflow identity, 
 
 ## Project / auth layer
 
-Authentication establishes actor identity; project authorization determines allowed actions. Projects and memberships will define access to proposals, comparison baselines, approvals, executions, and artifacts. Candidate roles are viewer, runner, reviewer, and admin; precise grants and any separation-of-duties rule remain implementation decisions. Server-side checks must bind every referenced object to the authorized project. Later machine identities use this same boundary.
+An upstream authentication adapter will establish actor identity; the implemented authorization boundary determines allowed actions. Projects and memberships define access to proposals, comparison baselines, approvals, executions, and artifacts. The current role matrix covers viewer, runner, reviewer, and admin with explicit read/propose/review/cancel/manage permissions. Server-side checks bind every referenced object to the authorized project. Credential verification, sessions/tokens, and separation-of-duties policy remain implementation decisions for the API; later machine identities must use this same boundary.
 
 ## Preflight layer
 

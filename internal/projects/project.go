@@ -12,6 +12,7 @@ var (
 	ErrProjectIDRequired   = errors.New("project ID is required")
 	ErrProjectNameRequired = errors.New("project name is required")
 	ErrInvalidRole         = errors.New("project role is invalid")
+	ErrMembershipNotFound  = errors.New("project membership not found")
 )
 
 type ProjectID string
@@ -45,7 +46,7 @@ func NewProject(id ProjectID, name string) (Project, error) {
 func (project Project) ID() ProjectID { return project.id }
 func (project Project) Name() string  { return project.name }
 
-// Role is a label only. Permission grants are defined in Phase 3.
+// Role is a label. Permission grants are defined by the authorization package.
 type Role string
 
 const (
