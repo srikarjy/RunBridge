@@ -84,7 +84,7 @@ Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcom
 
 ## Phase 10 — Submission Reconciliation
 
-**Status: integration foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure, and its bounded service orchestrates candidate lookup, correlation, retry gating, adoption, and manual-review sinks. A production worker and persisted observation evidence remain.
+**Status: integration foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure; its bounded service orchestrates candidate lookup, correlation, retry gating, adoption, and manual-review sinks; and its in-process worker runs bounded recovery passes with cancellation and transient-error handling. A production Seqera observation adapter and persisted observation evidence remain.
 
 Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authoritative external observations. Correlate persisted attempts with remote executions. Handle no match, multiple matches, delayed visibility, and already completed runs. Only retry launches when evidence or verified external idempotency makes it safe; retain unresolved uncertainty otherwise.
 
