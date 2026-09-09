@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,12 +11,19 @@ import (
 	"syscall"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/srikarjy/RunBridge/internal/auth"
+	"github.com/srikarjy/RunBridge/internal/authorization"
+	"github.com/srikarjy/RunBridge/internal/httpapi"
 	"github.com/srikarjy/RunBridge/internal/observability"
+	"github.com/srikarjy/RunBridge/internal/postgres"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	server := &http.Server{Addr: env("RUNBRIDGE_ADDR", ":8080"), Handler: handler()}
+	serviceHandler, closeDB := configuredHandler(logger)
+	defer closeDB()
+	server := &http.Server{Addr: env("RUNBRIDGE_ADDR", ":8080"), Handler: serviceHandler}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -35,6 +43,10 @@ func main() {
 }
 
 func handler() http.Handler {
+	return handlerWithAudit(nil, nil)
+}
+
+func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver) http.Handler {
 	metrics := &observability.Metrics{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
@@ -47,7 +59,39 @@ func handler() http.Handler {
 		writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		_, _ = fmt.Fprintf(writer, "runbridge_submission_failures_total %d\nrunbridge_reconciliation_attempts_total %d\nrunbridge_webhook_duplicates_total %d\nrunbridge_transition_conflicts_total %d\n", snapshot.SubmissionFailures, snapshot.ReconciliationAttempts, snapshot.WebhookDuplicates, snapshot.TransitionConflicts)
 	})
+	if store != nil && resolver != nil {
+		mux.Handle("GET /projects/{projectID}/audit", &httpapi.AuditHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
+	}
 	return mux
+}
+
+func configuredHandler(logger *slog.Logger) (http.Handler, func()) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		return handler(), func() {}
+	}
+	database, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		logger.Error("database open failed", "error", err)
+		return handler(), func() {}
+	}
+	if err := postgres.Migrate(context.Background(), database); err != nil {
+		logger.Error("database migration failed", "error", err)
+		_ = database.Close()
+		return handler(), func() {}
+	}
+	actorID, actorErr := auth.NewActorID(env("RUNBRIDGE_ACTOR_ID", "service"))
+	actor, actorBuildErr := auth.NewActor(actorID, env("RUNBRIDGE_ACTOR_NAME", "RunBridge service"), auth.ActorKindHuman)
+	token := os.Getenv("RUNBRIDGE_API_TOKEN")
+	if actorErr != nil || actorBuildErr != nil || token == "" {
+		logger.Warn("audit API disabled: actor or token configuration is missing")
+		return handler(), func() { _ = database.Close() }
+	}
+	authenticator, err := httpapi.NewStaticBearerAuthenticator(token, actor)
+	if err != nil {
+		return handler(), func() { _ = database.Close() }
+	}
+	return handlerWithAudit(postgres.NewStore(database), authenticator.Resolve), func() { _ = database.Close() }
 }
 
 func env(key, fallback string) string {
