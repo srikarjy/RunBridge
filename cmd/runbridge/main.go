@@ -78,7 +78,7 @@ func handlerWithDependencies(store *postgres.Store, resolver httpapi.PrincipalRe
 	mux.HandleFunc("GET /metrics", func(writer http.ResponseWriter, _ *http.Request) {
 		snapshot := metrics.Snapshot()
 		writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		_, _ = fmt.Fprintf(writer, "runbridge_submission_failures_total %d\nrunbridge_reconciliation_attempts_total %d\nrunbridge_webhook_duplicates_total %d\nrunbridge_transition_conflicts_total %d\n", snapshot.SubmissionFailures, snapshot.ReconciliationAttempts, snapshot.WebhookDuplicates, snapshot.TransitionConflicts)
+		_, _ = fmt.Fprintf(writer, "runbridge_http_requests_total %d\nrunbridge_http_errors_total %d\nrunbridge_submission_failures_total %d\nrunbridge_reconciliation_attempts_total %d\nrunbridge_webhook_duplicates_total %d\nrunbridge_transition_conflicts_total %d\n", snapshot.HTTPRequests, snapshot.HTTPErrors, snapshot.SubmissionFailures, snapshot.ReconciliationAttempts, snapshot.WebhookDuplicates, snapshot.TransitionConflicts)
 	})
 	if store != nil && resolver != nil {
 		mux.Handle("GET /projects/{projectID}/audit", &httpapi.AuditHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
@@ -87,7 +87,7 @@ func handlerWithDependencies(store *postgres.Store, resolver httpapi.PrincipalRe
 	if webhook != nil {
 		mux.Handle("POST /webhooks/seqera", webhook)
 	}
-	return security.Headers(observability.Middleware(mux, slog.Default()))
+	return security.Headers(observability.MiddlewareWithMetrics(mux, slog.Default(), metrics))
 }
 
 func configuredHandler(logger *slog.Logger) (http.Handler, func(), error) {

@@ -29,3 +29,15 @@ func TestMiddlewareAddsServerOwnedRequestID(t *testing.T) {
 		t.Fatalf("completion log missing: %s", logs.String())
 	}
 }
+
+func TestMiddlewareRecordsHTTPMetrics(t *testing.T) {
+	metrics := &Metrics{}
+	handler := MiddlewareWithMetrics(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusBadGateway)
+	}), slog.Default(), metrics)
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/upstream", nil))
+	snapshot := metrics.Snapshot()
+	if snapshot.HTTPRequests != 1 || snapshot.HTTPErrors != 1 {
+		t.Fatalf("metrics: %+v", snapshot)
+	}
+}

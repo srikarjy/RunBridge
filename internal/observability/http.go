@@ -30,6 +30,10 @@ func (writer *statusWriter) Write(body []byte) (int, error) {
 // caller, and emits one structured completion record with method, path, and
 // status. A client cannot overwrite the ID used for log correlation.
 func Middleware(next http.Handler, logger *slog.Logger) http.Handler {
+	return MiddlewareWithMetrics(next, logger, nil)
+}
+
+func MiddlewareWithMetrics(next http.Handler, logger *slog.Logger, metrics *Metrics) http.Handler {
 	if next == nil {
 		next = http.NotFoundHandler()
 	}
@@ -37,6 +41,9 @@ func Middleware(next http.Handler, logger *slog.Logger) http.Handler {
 		logger = slog.Default()
 	}
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if metrics != nil {
+			metrics.HTTPRequests.Add(1)
+		}
 		requestID, err := NewID()
 		if err != nil {
 			http.Error(writer, "request correlation unavailable", http.StatusInternalServerError)
@@ -51,6 +58,9 @@ func Middleware(next http.Handler, logger *slog.Logger) http.Handler {
 		status := captured.status
 		if status == 0 {
 			status = http.StatusOK
+		}
+		if metrics != nil && status >= http.StatusInternalServerError {
+			metrics.HTTPErrors.Add(1)
 		}
 		Logger(logger, request.Context()).Info("http request completed", "method", request.Method, "path", request.URL.Path, "status", status, "duration_ms", time.Since(started).Milliseconds())
 	})
