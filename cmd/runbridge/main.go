@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/srikarjy/RunBridge/internal/observability"
 )
 
 func main() {
@@ -32,11 +35,17 @@ func main() {
 }
 
 func handler() http.Handler {
+	metrics := &observability.Metrics{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{"status":"ok"}`))
+	})
+	mux.HandleFunc("GET /metrics", func(writer http.ResponseWriter, _ *http.Request) {
+		snapshot := metrics.Snapshot()
+		writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		_, _ = fmt.Fprintf(writer, "runbridge_submission_failures_total %d\nrunbridge_reconciliation_attempts_total %d\nrunbridge_webhook_duplicates_total %d\nrunbridge_transition_conflicts_total %d\n", snapshot.SubmissionFailures, snapshot.ReconciliationAttempts, snapshot.WebhookDuplicates, snapshot.TransitionConflicts)
 	})
 	return mux
 }
