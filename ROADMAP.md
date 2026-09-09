@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 4 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 5 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -43,6 +43,8 @@ Support exactly nf-core/rnaseq. Define workflow revision, samples and input iden
 **Completion gate:** deterministic tests show semantically equivalent requests normalize consistently and meaningful changes remain distinguishable; no arbitrary-workflow execution is accepted.
 
 ## Phase 5 — Preflight Validation
+
+**Complete.**
 
 Implement structured deterministic checks for required inputs, sample metadata structure, supported revisions, resource limits, project eligibility, accessible inputs where verifiable, and obvious configuration conflicts. Distinguish blocking failures, warnings, and unavailable checks. Persist evidence tied to the specification and check version.
 

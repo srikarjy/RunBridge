@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, and nf-core/rnaseq specification normalization are implemented through Phase 4. API credential authentication, preflight/diff behavior, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, and deterministic preflight checks are implemented through Phase 5. API credential authentication, Run Diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -38,7 +38,7 @@ An upstream authentication adapter will establish actor identity; the implemente
 
 ## Preflight layer
 
-Preflight will perform deterministic structural and configuration checks for the supported rnaseq specification. It will report failures and warnings with field references, check identities, and relevant evidence. Checks of remote input access are observations at a point in time, not promises of future availability. Record check version and result freshness; policy must decide when revalidation is required.
+Preflight performs deterministic structural and configuration checks for the supported rnaseq specification and returns check codes, statuses, fields, and messages. It verifies canonical persisted bytes, project permission to propose, and trusted sample/CPU/memory boundaries. Checks of remote input access are observations at a point in time, not promises of future availability. Future persistence will record check version and result freshness; policy must decide when revalidation is required.
 
 ## Run Diff layer
 

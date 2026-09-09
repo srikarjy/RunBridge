@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -18,19 +19,21 @@ const (
 )
 
 var (
-	ErrWorkflowRevisionRequired = errors.New("workflow revision is required")
-	ErrSampleRequired           = errors.New("at least one sample is required")
-	ErrSampleIDRequired         = errors.New("sample ID is required")
-	ErrDuplicateSampleID        = errors.New("sample IDs must be unique")
-	ErrRead1Required            = errors.New("read 1 input is required")
-	ErrRead2Required            = errors.New("read 2 input is required")
-	ErrReferenceGenomeRequired  = errors.New("reference genome is required")
-	ErrReferenceInputRequired   = errors.New("at least one reference input is required")
-	ErrProfileRequired          = errors.New("compute profile is required")
-	ErrCPUsInvalid              = errors.New("CPUs must be greater than zero")
-	ErrMemoryInvalid            = errors.New("memory must be greater than zero")
-	ErrParameterNameInvalid     = errors.New("parameter name is invalid")
-	ErrDuplicateParameterName   = errors.New("parameter names must be unique after normalization")
+	ErrWorkflowRevisionRequired            = errors.New("workflow revision is required")
+	ErrSampleRequired                      = errors.New("at least one sample is required")
+	ErrSampleIDRequired                    = errors.New("sample ID is required")
+	ErrDuplicateSampleID                   = errors.New("sample IDs must be unique")
+	ErrRead1Required                       = errors.New("read 1 input is required")
+	ErrRead2Required                       = errors.New("read 2 input is required")
+	ErrReferenceGenomeRequired             = errors.New("reference genome is required")
+	ErrReferenceInputRequired              = errors.New("at least one reference input is required")
+	ErrProfileRequired                     = errors.New("compute profile is required")
+	ErrCPUsInvalid                         = errors.New("CPUs must be greater than zero")
+	ErrMemoryInvalid                       = errors.New("memory must be greater than zero")
+	ErrParameterNameInvalid                = errors.New("parameter name is invalid")
+	ErrDuplicateParameterName              = errors.New("parameter names must be unique after normalization")
+	ErrNormalizedConfigurationInvalid      = errors.New("normalized rnaseq configuration is invalid")
+	ErrNormalizedConfigurationNonCanonical = errors.New("normalized rnaseq configuration is not canonical")
 )
 
 // Request is the supported human-facing shape before normalization. Memory is
@@ -164,6 +167,60 @@ func Normalize(request Request) (runs.WorkflowIdentifier, runs.NormalizedConfigu
 		return runs.WorkflowIdentifier{}, runs.NormalizedConfiguration{}, err
 	}
 	return workflow, configuration, nil
+}
+
+// Summary contains the fields preflight and policy need without exposing the
+// canonical document representation as a mutable API.
+type Summary struct {
+	SampleCount int
+	Profile     string
+	Genome      string
+	CPUs        int
+	MemoryMiB   int64
+}
+
+// ValidateNormalizedConfiguration verifies a persisted configuration's
+// version, shape, required fields, ordering, and canonical bytes. It is a
+// defensive check for data read from persistence; it does not access inputs.
+func ValidateNormalizedConfiguration(configuration runs.NormalizedConfiguration) (Summary, error) {
+	if configuration.SchemaVersion() != NormalizationVersion {
+		return Summary{}, fmt.Errorf("%w: unsupported normalization version %q", ErrNormalizedConfigurationInvalid, configuration.SchemaVersion())
+	}
+	var document canonicalDocument
+	decoder := json.NewDecoder(strings.NewReader(string(configuration.Document())))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&document); err != nil {
+		return Summary{}, fmt.Errorf("%w: decode document: %v", ErrNormalizedConfigurationInvalid, err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return Summary{}, fmt.Errorf("%w: multiple JSON values", ErrNormalizedConfigurationInvalid)
+		}
+		return Summary{}, fmt.Errorf("%w: trailing data: %v", ErrNormalizedConfigurationInvalid, err)
+	}
+	if document.Profile == "" || len(document.Samples) == 0 || document.Reference.Genome == "" || document.Resources.CPUs <= 0 || document.Resources.MemoryMiB <= 0 {
+		return Summary{}, fmt.Errorf("%w: required field is missing or invalid", ErrNormalizedConfigurationInvalid)
+	}
+	for index, sample := range document.Samples {
+		if sample.ID == "" || sample.Read1 == "" || sample.Read2 == "" {
+			return Summary{}, fmt.Errorf("%w: sample %d is incomplete", ErrNormalizedConfigurationInvalid, index)
+		}
+		if index > 0 && document.Samples[index-1].ID >= sample.ID {
+			return Summary{}, fmt.Errorf("%w: samples are not strictly sorted by ID", ErrNormalizedConfigurationInvalid)
+		}
+	}
+	if document.Reference.Fasta == "" && document.Reference.GTF == "" && document.Reference.STARIndex == "" && document.Reference.HISAT2Index == "" {
+		return Summary{}, fmt.Errorf("%w: reference input is missing", ErrNormalizedConfigurationInvalid)
+	}
+	canonical, err := json.Marshal(document)
+	if err != nil {
+		return Summary{}, fmt.Errorf("%w: re-encode document: %v", ErrNormalizedConfigurationInvalid, err)
+	}
+	if string(canonical) != string(configuration.Document()) {
+		return Summary{}, ErrNormalizedConfigurationNonCanonical
+	}
+	return Summary{SampleCount: len(document.Samples), Profile: document.Profile, Genome: document.Reference.Genome, CPUs: document.Resources.CPUs, MemoryMiB: document.Resources.MemoryMiB}, nil
 }
 
 func normalizeReference(reference ReferenceInput) (canonicalReference, error) {
