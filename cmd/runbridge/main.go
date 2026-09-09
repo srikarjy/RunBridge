@@ -14,9 +14,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/srikarjy/RunBridge/internal/auth"
 	"github.com/srikarjy/RunBridge/internal/authorization"
+	"github.com/srikarjy/RunBridge/internal/events"
 	"github.com/srikarjy/RunBridge/internal/httpapi"
 	"github.com/srikarjy/RunBridge/internal/observability"
 	"github.com/srikarjy/RunBridge/internal/postgres"
+	"github.com/srikarjy/RunBridge/internal/security"
+	"github.com/srikarjy/RunBridge/internal/webhooks"
 )
 
 func main() {
@@ -51,6 +54,10 @@ func handler() http.Handler {
 }
 
 func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver) http.Handler {
+	return handlerWithDependencies(store, resolver, nil)
+}
+
+func handlerWithDependencies(store *postgres.Store, resolver httpapi.PrincipalResolver, webhook http.Handler) http.Handler {
 	metrics := &observability.Metrics{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
@@ -76,6 +83,9 @@ func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver)
 	if store != nil && resolver != nil {
 		mux.Handle("GET /projects/{projectID}/audit", &httpapi.AuditHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
 		mux.Handle("GET /projects/{projectID}/executions/{executionID}", &httpapi.ExecutionHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
+	}
+	if webhook != nil {
+		mux.Handle("POST /webhooks/seqera", webhook)
 	}
 	return mux
 }
@@ -104,7 +114,21 @@ func configuredHandler(logger *slog.Logger) (http.Handler, func(), error) {
 	if err != nil {
 		return handler(), func() { _ = database.Close() }, fmt.Errorf("configure authenticator: %w", err)
 	}
-	return handlerWithAudit(postgres.NewStore(database), authenticator.Resolve), func() { _ = database.Close() }, nil
+	store := postgres.NewStore(database)
+	var webhookHandler http.Handler
+	if secret := os.Getenv("RUNBRIDGE_WEBHOOK_SECRET"); secret != "" {
+		verifier, verifierErr := security.NewWebhookVerifier(secret, 5*time.Minute)
+		if verifierErr != nil {
+			_ = database.Close()
+			return handler(), func() {}, fmt.Errorf("configure webhook verifier: %w", verifierErr)
+		}
+		processor := events.NewProcessor(store, store)
+		webhookHandler = webhooks.NewHandler(verifier, func(ctxRequest *http.Request, event events.Event) error {
+			_, err := processor.Process(ctxRequest.Context(), event)
+			return err
+		})
+	}
+	return handlerWithDependencies(store, authenticator.Resolve, webhookHandler), func() { _ = database.Close() }, nil
 }
 
 func env(key, fallback string) string {

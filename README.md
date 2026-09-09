@@ -117,7 +117,7 @@ Planned server-side authorization will enforce project memberships and roles for
 
 ## Reproducibility / Integrity
 
-The design calls for a canonical normalized specification and immutable approval target. Later integrity work will add SHA-256 specification hashes, artifact manifests, approval receipts, and final execution receipts, with potential AWS KMS-backed signatures.
+The design uses a canonical normalized specification and immutable approval target. The integrity foundation now derives SHA-256 specification and artifact-manifest hashes and persists approval and execution receipts; chained hashes and potential AWS KMS-backed signatures remain later hardening.
 
 Hashes attest to recorded bytes, not scientific validity or the contents behind a mutable URL. Pinned workflow/container references and versioned input evidence will be necessary to strengthen reproducibility. Stage 1 implements no cryptography.
 
@@ -141,7 +141,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. `internal/policy` makes deterministic allow/review/deny decisions, and `internal/approvals` binds those decisions to exact specification revisions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures; the store persists approval records as well as current aggregates. There is no runtime command.
+**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. `internal/policy` makes deterministic allow/review/deny decisions, and `internal/approvals` binds those decisions to exact specification revisions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, audit, and integrity-receipt structures. The service exposes health, readiness, metrics, authorized audit/execution reads, and an authenticated Seqera webhook route when configured.
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
@@ -170,6 +170,21 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `tests/integration/`, `tests/fixtures/` | Future integration verification and sanitized fixture data |
 
 Empty `.gitkeep` files retain the remaining planned directories in Git; they are not implemented packages. This layout is provisional and may be simplified as the first vertical slice reveals real boundaries.
+
+## Runtime configuration and verification
+
+With `DATABASE_URL` set, the service runs embedded PostgreSQL migrations at startup. `RUNBRIDGE_API_TOKEN`, `RUNBRIDGE_ACTOR_ID`, and `RUNBRIDGE_ACTOR_NAME` enable the project-scoped read APIs. `RUNBRIDGE_WEBHOOK_SECRET` enables `POST /webhooks/seqera`; requests must carry the timestamp and HMAC headers described in the webhook package. Secrets belong in a managed secret store, never in Git.
+
+The repository’s repeatable checks are:
+
+```sh
+go test -race ./...
+go vet ./...
+git diff --check
+terraform fmt -check -recursive deployments/terraform
+```
+
+The latest coverage run reports package coverage for the tested domain and integration boundaries; PostgreSQL methods remain integration-tested only when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated database.
 
 ## Current Status
 
