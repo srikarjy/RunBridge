@@ -109,17 +109,17 @@ RunBridge would surface these changes before execution and evaluate the configur
 
 ## Reliability Challenges
 
-The execution boundary requires more than CRUD: duplicate submissions, crashes between database updates and external calls, webhook redelivery, eventual consistency, API outages, and cancellation racing with completion all affect correctness. Planned controls include scoped idempotency keys, transactional state changes, bounded retries, persistent submission attempts, and reconciliation. An HTTP timeout is not proof that a launch failed, and a cancellation request is not proof that execution stopped.
+The execution boundary requires more than CRUD: duplicate submissions, crashes between database updates and external calls, webhook redelivery, eventual consistency, API outages, and cancellation racing with completion all affect correctness. The execution package and PostgreSQL store provide scoped attempt identities, transactional state changes, bounded retry decisions, persistent submission attempts, and reconciliation interfaces. An HTTP timeout is not proof that a launch failed, and a cancellation request is not proof that execution stopped.
 
 ## Security / Authorization
 
-Planned server-side authorization will enforce project memberships and roles for every command and query, including baseline selection, approvals, artifacts, and audit access. Viewer, runner, reviewer, and admin are conceptual roles pending implementation. Approval records will preserve reviewer identity and immutable targets; membership changes and submission eligibility will be rechecked at the execution boundary. Machine identities may be added later. Credentials belong in secret storage, not source control or audit payloads.
+Server-side authorization enforces project memberships and roles for the implemented audit and execution queries. Viewer, runner, reviewer, and admin roles are modeled in the domain. Approval records preserve reviewer identity and immutable targets; membership and submission eligibility checks remain required at future command boundaries. Machine identities may be added later. Credentials belong in secret storage, not source control or audit payloads.
 
 ## Reproducibility / Integrity
 
 The design uses a canonical normalized specification and immutable approval target. The integrity foundation now derives SHA-256 specification and artifact-manifest hashes and persists approval and execution receipts; chained hashes and potential AWS KMS-backed signatures remain later hardening.
 
-Hashes attest to recorded bytes, not scientific validity or the contents behind a mutable URL. Pinned workflow/container references and versioned input evidence will be necessary to strengthen reproducibility. Stage 1 implements no cryptography.
+Hashes attest to recorded bytes, not scientific validity or the contents behind a mutable URL. Pinned workflow/container references and versioned input evidence will be necessary to strengthen reproducibility.
 
 ## Initial Scope
 

@@ -25,3 +25,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
       - name: Verify Terraform formatting
         run: terraform fmt -check -recursive deployments/terraform
+      - name: Initialize Terraform without backend
+        working-directory: deployments/terraform
+        run: terraform init -backend=false -input=false
+      - name: Validate Terraform configuration
+        working-directory: deployments/terraform
+        run: terraform validate
