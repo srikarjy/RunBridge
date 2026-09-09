@@ -5,17 +5,19 @@ import (
 	"fmt"
 
 	"github.com/srikarjy/RunBridge/internal/observability"
+	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
 // Candidate is a locally durable submission that needs an external lookup.
 // CorrelationID is generated per attempt and must be supplied to the external
 // integration when the backend supports correlation metadata.
 type Candidate struct {
-	ExecutionID   string
-	WorkspaceID   string
-	CorrelationID string
-	AttemptNumber int64
-	MaxAttempts   int64
+	ExecutionID    string
+	WorkspaceID    string
+	CorrelationID  string
+	AttemptNumber  int64
+	MaxAttempts    int64
+	ExpectedStatus runs.Status
 }
 
 type CandidateSource interface {

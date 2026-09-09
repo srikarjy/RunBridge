@@ -17,6 +17,7 @@ import (
 	"github.com/srikarjy/RunBridge/internal/execution"
 	"github.com/srikarjy/RunBridge/internal/integrity"
 	"github.com/srikarjy/RunBridge/internal/projects"
+	"github.com/srikarjy/RunBridge/internal/reconciliation"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
@@ -246,6 +247,13 @@ func (store *Store) CreateApproval(ctx context.Context, approval approvals.Appro
 // The approval/specification foreign keys ensure the execution cannot point
 // at an unrelated or mutable proposal revision.
 func (store *Store) CreateExecution(ctx context.Context, id, projectID, proposalID, specificationID, approvalID string, status runs.Status, createdAt time.Time) error {
+	return store.CreateExecutionWithWorkspace(ctx, id, projectID, proposalID, specificationID, approvalID, status, "", createdAt)
+}
+
+// CreateExecutionWithWorkspace retains the requested workspace before launch.
+// That value is required to reconcile a timeout where the external ID was
+// accepted but the response never reached RunBridge.
+func (store *Store) CreateExecutionWithWorkspace(ctx context.Context, id, projectID, proposalID, specificationID, approvalID string, status runs.Status, workspaceID string, createdAt time.Time) error {
 	if err := execution.ValidateState(status); err != nil {
 		return fmt.Errorf("create execution: %w", err)
 	}
@@ -256,10 +264,48 @@ func (store *Store) CreateExecution(ctx context.Context, id, projectID, proposal
 		return fmt.Errorf("create execution: created time is required: %w", ErrConflict)
 	}
 	_, err := store.db.ExecContext(ctx, `
-        insert into executions (id, project_id, proposal_id, specification_id, approval_id, status, created_at, updated_at)
-        values ($1, $2, $3, $4, $5, $6, $7, $7)
-    `, id, projectID, proposalID, specificationID, approvalID, status, createdAt)
+        insert into executions (id, project_id, proposal_id, specification_id, approval_id, status, requested_workspace_id, created_at, updated_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+    `, id, projectID, proposalID, specificationID, approvalID, status, nullableStringString(workspaceID), createdAt)
 	return classify("create execution", err)
+}
+
+// ListCandidates supplies recoverable attempts to a reconciliation worker.
+func (store *Store) ListCandidates(ctx context.Context, limit int) ([]reconciliation.Candidate, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := store.db.QueryContext(ctx, `
+        select e.id, coalesce(e.requested_workspace_id, e.external_workspace_id),
+               a.correlation_id, a.attempt_number, e.status
+        from executions e
+        join lateral (
+            select correlation_id, attempt_number from execution_attempts
+            where execution_id = e.id order by attempt_number desc limit 1
+        ) a on true
+        where e.status in ('SUBMITTING', 'SUBMISSION_UNKNOWN')
+        order by e.updated_at asc limit $1
+    `, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list reconciliation candidates: %w", err)
+	}
+	defer rows.Close()
+	var candidates []reconciliation.Candidate
+	for rows.Next() {
+		var candidate reconciliation.Candidate
+		if err := rows.Scan(&candidate.ExecutionID, &candidate.WorkspaceID, &candidate.CorrelationID, &candidate.AttemptNumber, &candidate.ExpectedStatus); err != nil {
+			return nil, fmt.Errorf("scan reconciliation candidate: %w", err)
+		}
+		candidate.MaxAttempts = 3
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read reconciliation candidates: %w", err)
+	}
+	return candidates, nil
 }
 
 // TransitionExecution performs a conditional update. A stale expected state
@@ -605,6 +651,13 @@ func nullableString(value *string) any {
 		return nil
 	}
 	return *value
+}
+
+func nullableStringString(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }
 
 func (store *Store) GetProposal(ctx context.Context, projectID projects.ProjectID, proposalID runs.ProposalID) (runs.Proposal, error) {
