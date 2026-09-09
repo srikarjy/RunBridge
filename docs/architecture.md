@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, and policy-bound approval decisions are implemented through Phase 7. API credential authentication, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, policy-bound approval decisions, and the narrow Seqera transport adapter are implemented through Phase 8. Execution coordination remains planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -54,7 +54,7 @@ Execution coordination will persist submission intent before external work, enfo
 
 ## Seqera integration
 
-The adapter will own request translation, external IDs, error classification, authentication to Seqera, state mapping, and supported cancellation behavior. Only operations needed by the vertical slice belong here. Supported launch fields, idempotency facilities, correlation searches, webhook authentication, and consistency guarantees must be verified during implementation; this design assumes none without evidence.
+The adapter owns the documented HTTP paths for launch, workflow lookup, and cancellation, bearer-token transport, API-version headers, response decoding, and basic error classification. It returns external identifiers and status but never mutates the local lifecycle. Launch payload mapping from the approved rnaseq specification, idempotency facilities, correlation searches, webhook authentication, and consistency guarantees must be verified before production execution; this phase assumes none without evidence.
 
 Submission must derive from frozen execution-relevant data. Credentials are resolved separately, and any mutable profile, reference, or environment that can alter intent needs pinning or explicit recorded resolution. Save submission evidence to demonstrate the mapping between approval and the external request. See [reliability](reliability.md).
 

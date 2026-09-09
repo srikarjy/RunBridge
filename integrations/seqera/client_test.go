@@ -1,0 +1,61 @@
+package seqera
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+type fakeTransport struct{ calls int }
+
+func (t *fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	t.calls++
+	if r.Header.Get("Authorization") != "Bearer secret" || r.Header.Get("Accept-Version") != "1" {
+		return nil, io.ErrUnexpectedEOF
+	}
+	var status int
+	var body string
+	switch r.Method + " " + r.URL.Path {
+	case "POST /workflow/launch":
+		if r.URL.Query().Get("workspaceId") != "123" {
+			return nil, io.ErrUnexpectedEOF
+		}
+		data, _ := io.ReadAll(r.Body)
+		text := string(data)
+		if !strings.Contains(text, `"pipeline":"nf-core/rnaseq"`) || !strings.Contains(text, `"revision":"3.18.0"`) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		status, body = http.StatusOK, `{"workflowId":"wf-1"}`
+	case "GET /workflow/wf-1":
+		status, body = http.StatusOK, `{"id":"wf-1","status":"RUNNING"}`
+	case "POST /workflow/wf-1/cancel":
+		status = http.StatusNoContent
+	default:
+		status = http.StatusNotFound
+	}
+	return &http.Response{StatusCode: status, Status: http.StatusText(status), Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+}
+
+func TestClientUsesDocumentedWorkflowEndpoints(t *testing.T) {
+	transport := &fakeTransport{}
+	client, err := NewClient("https://seqera.example", "secret", &http.Client{Transport: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	launch, err := client.Submit(context.Background(), LaunchRequest{WorkspaceID: "123", Pipeline: "nf-core/rnaseq", Revision: "3.18.0", ParamsText: `{"input":"samples.csv"}`})
+	if err != nil || launch.WorkflowID != "wf-1" {
+		t.Fatalf("launch: %#v %v", launch, err)
+	}
+	workflow, err := client.GetWorkflow(context.Background(), launch.WorkflowID)
+	if err != nil || workflow.Status != "RUNNING" {
+		t.Fatalf("workflow: %#v %v", workflow, err)
+	}
+	if err := client.Cancel(context.Background(), launch.WorkflowID); err != nil {
+		t.Fatal(err)
+	}
+	if transport.calls != 3 {
+		t.Fatalf("calls = %d", transport.calls)
+	}
+}

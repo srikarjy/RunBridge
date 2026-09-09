@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 7 — approval workflow.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, and immutable policy-bound approval decisions. No HTTP authentication adapter, API, Seqera integration, execution lifecycle, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 8 — Seqera integration boundary.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, and a tested Seqera HTTP adapter. No HTTP API, live credentials, execution lifecycle, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -173,7 +173,7 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 7 — approval workflow.** Deterministic policy now denies failed preflight, requires human review for first runs or changes, and records policy approval for unchanged passing runs. Approval decisions bind to exact immutable specification revisions. API authentication, Seqera integration, and workflow execution remain future work.
+**Phase 8 — Seqera integration boundary.** A narrow, credential-free adapter now targets the documented Platform API operations for launch, workflow lookup, and cancellation. It remains an external boundary: local execution state, retries, reconciliation, and approval enforcement are future phases.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 

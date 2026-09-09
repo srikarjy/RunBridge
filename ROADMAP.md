@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 7 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 8 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -67,6 +67,8 @@ Implement proposal → preflight/diff → deterministic approval requirement →
 **Completion gate:** stale review requests fail; execution-relevant changes require re-evaluation/re-approval; concurrent edits cannot redirect an approval to new intent. Define revocation, freshness, and submission-time authorization checks.
 
 ## Phase 8 — Seqera Integration
+
+**Status: complete.** Add a narrow adapter for the documented Seqera Platform API. The boundary targets `POST /workflow/launch`, `GET /workflow/{workflowId}`, and `POST /workflow/{workflowId}/cancel`, sends bearer authentication and API version headers, and returns external identifiers/status without owning RunBridge lifecycle state. Contract tests use an in-memory transport; no live credentials or production launch path are included. Mapping the approved rnaseq specification into a verified launch payload, idempotency, retries, and reconciliation remain explicit follow-up work.
 
 Build only the client operations required to submit rnaseq, retrieve state, resolve external IDs, and cancel where supported. Keep request translation and external error/state handling behind a narrow adapter. Verify actual launch schemas, authentication, idempotency/correlation options, pagination, rate limits, and cancellation semantics before relying on them.
 
