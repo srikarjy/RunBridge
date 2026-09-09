@@ -106,6 +106,8 @@ Complete append-oriented coverage and expose authorized API queries for proposal
 
 ## Phase 13 — Integrity Hardening
 
+**Status: foundation complete.** `internal/integrity` now derives a deterministic SHA-256 digest from workflow identity, normalization version, and the exact normalized bytes. Signing, manifests, and receipt persistence remain future work.
+
 Bind canonical approved specification → SHA-256 → approval receipt → execution evidence → artifact manifest → final execution receipt. Version canonicalization and receipt formats. Distinguish content identity from mutable resource locations. Consider chained audit hashes and AWS KMS signatures after basic verification works.
 
 **Completion gate:** verification detects changed approved bytes and altered recorded artifact content when available; limits of external execution evidence are documented. Never claim signatures prove scientific correctness.

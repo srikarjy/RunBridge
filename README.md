@@ -147,7 +147,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 **Planned engineering:** context-aware request handling, idempotent operations, durable state transitions, RBAC, external reconciliation, structured logging, metrics, useful tracing, Docker, and AWS deployment. `deployments/terraform/` contains the initial ECS Fargate task/service foundation; it is not a claim of a live production environment.
 
-**Later integrity hardening:** SHA-256 specifications and manifests, with AWS KMS signing considered after the execution path is reliable.
+**Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes. **Later hardening:** artifact manifests and AWS KMS signing after the execution path is reliable.
 
 ## Repository Structure
 
