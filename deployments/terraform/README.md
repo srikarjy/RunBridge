@@ -21,4 +21,7 @@ terraform plan -var-file=environment.tfvars
 terraform apply -var-file=environment.tfvars
 ```
 
+Start from `environment.tfvars.example`, replace placeholders, and keep the
+real `environment.tfvars` outside version control.
+
 Never commit `*.tfvars`, tokens, or generated Terraform state.
