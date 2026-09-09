@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/srikarjy/RunBridge/internal/approvals"
+	"github.com/srikarjy/RunBridge/internal/audit"
 	"github.com/srikarjy/RunBridge/internal/auth"
 	"github.com/srikarjy/RunBridge/internal/events"
 	"github.com/srikarjy/RunBridge/internal/execution"
@@ -305,6 +306,44 @@ func (store *Store) RecordExternalEvent(ctx context.Context, event events.Event,
                   'external_execution', $4, $5, $6, $7, $8, $9::jsonb)
     `, event.ID, projectID, proposal, event.ExternalExecutionID, event.Source, event.ID, event.OccurredAt, recordedAt, string(metadataBytes))
 	return classify("record external event", err)
+}
+
+// RecordAuditEvent appends an immutable domain event. The database sequence
+// provides chronological ordering; callers never update an existing record.
+func (store *Store) RecordAuditEvent(ctx context.Context, event audit.Event) error {
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	metadata, err := json.Marshal(event.CloneMetadata())
+	if err != nil {
+		return fmt.Errorf("record audit event: marshal metadata: %w", err)
+	}
+	var proposal, actor, objectType, objectID, correlation, source, sourceID any
+	if event.ProposalID != "" {
+		proposal = event.ProposalID
+	}
+	if event.ActorID != "" {
+		actor = event.ActorID
+	}
+	if event.ObjectType != "" {
+		objectType = event.ObjectType
+	}
+	if event.ObjectID != "" {
+		objectID = event.ObjectID
+	}
+	if event.CorrelationID != "" {
+		correlation = event.CorrelationID
+	}
+	if event.SourceSystem != "" {
+		source, sourceID = event.SourceSystem, event.SourceEventID
+	}
+	_, err = store.db.ExecContext(ctx, `
+        insert into audit_events (id, schema_version, project_id, proposal_id, actor_id, actor_kind,
+            event_type, object_type, object_id, correlation_id, source_system, source_event_id,
+            source_occurred_at, recorded_at, metadata)
+        values ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
+    `, event.ID, event.ProjectID, proposal, actor, event.ActorKind, event.Type, objectType, objectID, correlation, source, sourceID, event.SourceOccurredAt, event.RecordedAt, string(metadata))
+	return classify("record audit event", err)
 }
 
 func nullableString(value *string) any {
