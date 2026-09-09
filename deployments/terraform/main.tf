@@ -40,11 +40,17 @@ resource "aws_ecs_task_definition" "runbridge" {
 }
 
 resource "aws_ecs_service" "runbridge" {
-  name            = var.name
-  cluster         = var.cluster_arn
-  task_definition = aws_ecs_task_definition.runbridge.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
+  name                              = var.name
+  cluster                           = var.cluster_arn
+  task_definition                   = aws_ecs_task_definition.runbridge.arn
+  desired_count                     = 1
+  launch_type                       = "FARGATE"
+  health_check_grace_period_seconds = 30
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   network_configuration {
     subnets          = var.subnet_ids
