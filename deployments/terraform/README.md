@@ -16,6 +16,8 @@ The configuration also creates an immutable, scan-on-push ECR repository with a
 small untagged-image lifecycle policy.
 Use an immutable image digest in production. Database migrations, TLS ingress,
 backups, alarms, and IAM policy documents require environment-specific review.
+See [OPERATIONS.md](OPERATIONS.md) for release, rollback, secret rotation,
+restore, and uncertain-submission recovery procedures.
 
 Example:
 
