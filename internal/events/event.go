@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/srikarjy/RunBridge/internal/execution"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
@@ -70,4 +71,18 @@ func Decide(current runs.Status, currentOccurredAt time.Time, event Event) (Deci
 		return Conflict, nil
 	}
 	return Apply, nil
+}
+
+// Transition validates an event and the resulting lifecycle change together.
+// Persistence callers should execute this before a conditional database
+// update, then record the event and state change in the same transaction.
+func Transition(current runs.Status, currentOccurredAt time.Time, event Event) (Decision, error) {
+	decision, err := Decide(current, currentOccurredAt, event)
+	if err != nil || decision != Apply {
+		return decision, err
+	}
+	if err := execution.Transition(current, event.Status); err != nil {
+		return Conflict, err
+	}
+	return decision, nil
 }

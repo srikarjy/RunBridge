@@ -35,3 +35,13 @@ func TestEventValidation(t *testing.T) {
 		t.Fatal("unexpected deduplication key")
 	}
 }
+
+func TestTransitionValidatesLifecycle(t *testing.T) {
+	now := time.Now().UTC()
+	if got, err := Transition(runs.StatusSubmitting, now, event(now.Add(time.Second), runs.StatusSucceeded)); err == nil || got != Conflict {
+		t.Fatalf("submitting cannot skip identified running state: %s %v", got, err)
+	}
+	if got, err := Transition(runs.StatusRunning, now, event(now.Add(time.Second), runs.StatusSucceeded)); err != nil || got != Apply {
+		t.Fatalf("running success: %s %v", got, err)
+	}
+}
