@@ -107,8 +107,8 @@ func configuredHandler(logger *slog.Logger) (http.Handler, func(), error) {
 	actor, actorBuildErr := auth.NewActor(actorID, env("RUNBRIDGE_ACTOR_NAME", "RunBridge service"), auth.ActorKindHuman)
 	token := os.Getenv("RUNBRIDGE_API_TOKEN")
 	if actorErr != nil || actorBuildErr != nil || token == "" {
-		logger.Warn("audit API disabled: actor or token configuration is missing")
-		return handler(), func() { _ = database.Close() }, nil
+		_ = database.Close()
+		return handler(), func() {}, fmt.Errorf("authorization configuration is required when DATABASE_URL is set")
 	}
 	authenticator, err := httpapi.NewStaticBearerAuthenticator(token, actor)
 	if err != nil {
