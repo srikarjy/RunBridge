@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/srikarjy/RunBridge/internal/auth"
@@ -46,7 +47,16 @@ func (handler *AuditHandler) ServeHTTP(writer http.ResponseWriter, request *http
 		return
 	}
 	limit := 100
-	records, err := handler.Store.ListAuditEvents(request.Context(), projectID.String(), limit)
+	after := int64(0)
+	if raw := strings.TrimSpace(request.URL.Query().Get("after")); raw != "" {
+		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil || parsed < 0 {
+			http.Error(writer, "invalid audit cursor", http.StatusBadRequest)
+			return
+		}
+		after = parsed
+	}
+	records, err := handler.Store.ListAuditEventsAfter(request.Context(), projectID.String(), after, limit)
 	if err != nil {
 		http.Error(writer, "audit unavailable", http.StatusInternalServerError)
 		return
