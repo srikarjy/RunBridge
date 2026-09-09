@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 9 — execution transition foundation.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, a tested Seqera HTTP adapter, and a tested legal-transition model for execution state. No HTTP API, live credentials, coordinator, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 11 — event-processing foundation.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, a tested Seqera HTTP adapter, durable execution/attempt persistence, reconciliation decisions, and conservative external-event handling. No HTTP API, live credentials, webhook server, coordinator, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 

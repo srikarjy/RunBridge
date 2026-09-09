@@ -92,6 +92,8 @@ Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authorit
 
 ## Phase 11 — Webhooks + Event Processing
 
+**Status: foundation complete.** External events now have validated source/event identity, a durable deduplication key, and conservative apply/duplicate/stale/conflict decisions. HTTP intake, authentication, persistence, and replay workers remain.
+
 Implement authenticated event intake, durable delivery records, idempotent consumption, duplicate handling, out-of-order awareness, and reconciliation. Acknowledge only after required persistence. Polling remains a recovery path; external events are not exactly-once.
 
 **Completion gate:** duplicate/redelivered events do not duplicate transitions; late observations do not regress terminal states; conflicting observations trigger reconciliation; interrupted processing can replay safely.
