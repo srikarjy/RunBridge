@@ -114,7 +114,7 @@ Bind canonical approved specification → SHA-256 → approval receipt → execu
 
 ## Phase 14 — Observability
 
-**Status: foundation complete.** `internal/observability` now provides request/run correlation IDs and standard-library structured logger enrichment. Metrics, tracing, and production dashboards remain.
+**Status: foundation complete.** `internal/observability` now provides request/run correlation IDs, standard-library structured logger enrichment, and atomic counters for key reliability signals. Tracing and production dashboards remain.
 
 Expand structured logging, request/run/attempt correlation, error classification, integration/state metrics, and tracing where useful. Signals include submission failures, reconciliation attempts and unresolved age, duplicate webhook counts, transition conflicts, approval latency, and submission latency. Avoid secrets and high-cardinality metric labels.
 
