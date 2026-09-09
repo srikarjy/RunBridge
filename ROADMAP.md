@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 8 are complete; Phase 9 is in progress.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 8 are complete; foundations for Phases 9 through 15 are implemented, with their full completion gates still in progress.** The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -100,13 +100,15 @@ Implement authenticated event intake, durable delivery records, idempotent consu
 
 ## Phase 12 — Audit Timeline
 
+**Status: foundation complete.** Audit events are append-only, external events are persisted with source identity, project-scoped timeline queries are available, and an authorization-aware HTTP handler is defined. Full event coverage and production authentication integration remain.
+
 Complete append-oriented coverage and expose authorized API queries for proposal creation, preflight, diff, policy, approval request/decision, submission attempt, external ID assignment, state changes, completion, cancellation, and artifacts. Protect records against accidental mutation and define correction/retention procedures.
 
 **Completion gate:** a run can be traced from request to approved revision to external execution and outcome; project isolation and redaction hold; state changes cannot silently lack audit evidence.
 
 ## Phase 13 — Integrity Hardening
 
-**Status: foundation complete.** `internal/integrity` now derives a deterministic SHA-256 digest from workflow identity, normalization version, and the exact normalized bytes. Signing, manifests, and receipt persistence remain future work.
+**Status: foundation complete.** `internal/integrity` now derives deterministic SHA-256 digests for exact normalized specifications and canonical artifact manifests. Signing and receipt persistence remain future work.
 
 Bind canonical approved specification → SHA-256 → approval receipt → execution evidence → artifact manifest → final execution receipt. Version canonicalization and receipt formats. Distinguish content identity from mutable resource locations. Consider chained audit hashes and AWS KMS signatures after basic verification works.
 
@@ -121,6 +123,8 @@ Expand structured logging, request/run/attempt correlation, error classification
 **Completion gate:** a failed or uncertain execution can be investigated across request, persisted attempt, and external observation; metrics have documented meaning without fabricated benchmarks. Basic diagnostics should accompany earlier phases rather than wait for this gate.
 
 ## Phase 15 — AWS Deployment
+
+**Status: foundation complete.** Docker packaging, ECS Fargate Terraform resources, CloudWatch logging, SSM secret references, health checks, and sanitized environment examples are present. A live AWS deployment, restore verification, and operational rollout are not claimed.
 
 Package the Go service with Docker. Choose an appropriately sized AWS application service and PostgreSQL setup, with secrets management, migrations, health/readiness checks, backups, and observability. Document rollout, rollback, credential rotation, and unresolved-submission recovery. No Kubernetes is required.
 
