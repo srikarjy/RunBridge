@@ -494,6 +494,25 @@ func (store *Store) ListRecoverableExecutions(ctx context.Context, limit int) ([
 	return records, nil
 }
 
+func (store *Store) GetExecution(ctx context.Context, projectID, executionID string) (ExecutionRecord, error) {
+	if strings.TrimSpace(projectID) == "" || strings.TrimSpace(executionID) == "" {
+		return ExecutionRecord{}, fmt.Errorf("get execution: project and execution are required: %w", ErrConflict)
+	}
+	var record ExecutionRecord
+	err := store.db.QueryRowContext(ctx, `
+        select id, project_id, proposal_id, specification_id, approval_id, status,
+               external_workspace_id, external_execution_id, created_at, updated_at
+        from executions where project_id = $1 and id = $2
+    `, projectID, executionID).Scan(&record.ID, &record.ProjectID, &record.ProposalID, &record.SpecificationID, &record.ApprovalID, &record.Status, &record.ExternalWorkspaceID, &record.ExternalExecutionID, &record.CreatedAt, &record.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ExecutionRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return ExecutionRecord{}, fmt.Errorf("get execution: %w", err)
+	}
+	return record, nil
+}
+
 func nullableString(value *string) any {
 	if value == nil {
 		return nil
