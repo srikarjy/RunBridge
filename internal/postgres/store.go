@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/srikarjy/RunBridge/internal/approvals"
 	"github.com/srikarjy/RunBridge/internal/auth"
+	"github.com/srikarjy/RunBridge/internal/events"
 	"github.com/srikarjy/RunBridge/internal/execution"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/runs"
@@ -272,6 +273,38 @@ func (store *Store) ResolveAttempt(ctx context.Context, executionID string, numb
 		return fmt.Errorf("resolve execution attempt: no unresolved attempt %d for %s: %w", number, executionID, ErrConflict)
 	}
 	return nil
+}
+
+// RecordExternalEvent stores a webhook/poll observation before it is applied
+// to execution state. The source/event pair is unique in PostgreSQL, making
+// redelivery safe across process restarts.
+func (store *Store) RecordExternalEvent(ctx context.Context, event events.Event, projectID string, proposalID *string, metadata any, recordedAt time.Time) error {
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(projectID) == "" || recordedAt.IsZero() {
+		return fmt.Errorf("record external event: project and timestamp are required: %w", ErrConflict)
+	}
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadataBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("record external event: marshal metadata: %w", err)
+	}
+	var proposal any
+	if proposalID != nil {
+		proposal = *proposalID
+	}
+	_, err = store.db.ExecContext(ctx, `
+        insert into audit_events (
+            id, schema_version, project_id, proposal_id, actor_kind, event_type,
+            object_type, object_id, source_system, source_event_id,
+            source_occurred_at, recorded_at, metadata
+        ) values ($1, 1, $2, $3, 'external', 'execution.status',
+                  'external_execution', $4, $5, $6, $7, $8, $9::jsonb)
+    `, event.ID, projectID, proposal, event.ExternalExecutionID, event.Source, event.ID, event.OccurredAt, recordedAt, string(metadataBytes))
+	return classify("record external event", err)
 }
 
 func nullableString(value *string) any {
