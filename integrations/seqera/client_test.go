@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
 type fakeTransport struct{ calls int }
@@ -36,6 +38,17 @@ func (t *fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		status = http.StatusNotFound
 	}
 	return &http.Response{StatusCode: status, Status: http.StatusText(status), Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+}
+
+func TestWorkflowStatusMapsExternalState(t *testing.T) {
+	client, err := NewClient("https://seqera.example", "secret", &http.Client{Transport: &fakeTransport{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := client.WorkflowStatus(context.Background(), "wf-1")
+	if err != nil || status != runs.StatusRunning {
+		t.Fatalf("status: %s %v", status, err)
+	}
 }
 
 func TestClientUsesDocumentedWorkflowEndpoints(t *testing.T) {

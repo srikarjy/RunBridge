@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/srikarjy/RunBridge/internal/execution"
+	"github.com/srikarjy/RunBridge/internal/runs"
 )
 
 const DefaultBaseURL = "https://api.cloud.seqera.io"
@@ -120,6 +123,14 @@ func (c *Client) GetWorkflow(ctx context.Context, workflowID string) (Workflow, 
 		workflow.ID = workflowID
 	}
 	return workflow, nil
+}
+
+func (c *Client) WorkflowStatus(ctx context.Context, workflowID string) (runs.Status, error) {
+	workflow, err := c.GetWorkflow(ctx, workflowID)
+	if err != nil {
+		return "", err
+	}
+	return execution.NormalizeExternalStatus(workflow.Status)
 }
 
 func (c *Client) Cancel(ctx context.Context, workflowID string) error {
