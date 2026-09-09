@@ -323,24 +323,48 @@ func (store *Store) TransitionExecution(ctx context.Context, id string, expected
 	if err := execution.Transition(expected, next); err != nil {
 		return err
 	}
+	if expected == next {
+		return nil
+	}
 	if (externalWorkspaceID == nil) != (externalExecutionID == nil) {
 		return fmt.Errorf("transition execution: external identifiers must be supplied together: %w", ErrConflict)
 	}
-	result, err := store.db.ExecContext(ctx, `
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("transition execution: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	var projectID, proposalID string
+	err = tx.QueryRowContext(ctx, `
         update executions
         set status = $1, external_workspace_id = coalesce($2, external_workspace_id),
             external_execution_id = coalesce($3, external_execution_id), updated_at = now()
         where id = $4 and status = $5
-    `, next, nullableString(externalWorkspaceID), nullableString(externalExecutionID), id, expected)
+        returning project_id, proposal_id
+    `, next, nullableString(externalWorkspaceID), nullableString(externalExecutionID), id, expected).Scan(&projectID, &proposalID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("transition execution: expected %s for %s: %w", expected, id, ErrConflict)
+	}
 	if err != nil {
 		return classify("transition execution", err)
 	}
-	rows, err := result.RowsAffected()
+	auditID, err := newAuditID()
 	if err != nil {
-		return fmt.Errorf("transition execution: rows affected: %w", err)
+		return err
 	}
-	if rows == 0 {
-		return fmt.Errorf("transition execution: expected %s for %s: %w", expected, id, ErrConflict)
+	metadata, err := json.Marshal(map[string]any{"from": expected, "to": next})
+	if err != nil {
+		return fmt.Errorf("transition execution: marshal audit metadata: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+        insert into audit_events (id, schema_version, project_id, proposal_id, actor_kind,
+            event_type, object_type, object_id, recorded_at, metadata)
+        values ($1, 1, $2, $3, 'system', 'execution.state_changed', 'execution', $4, now(), $5::jsonb)
+    `, auditID, projectID, proposalID, id, string(metadata)); err != nil {
+		return classify("transition execution: audit", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("transition execution: commit: %w", err)
 	}
 	return nil
 }

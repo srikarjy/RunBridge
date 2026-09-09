@@ -106,6 +106,19 @@ func TestPostgresPersistence(t *testing.T) {
 	if decision != string(approvals.DecisionPolicyApproved) || storedSpecificationID != current.ID().String() {
 		t.Fatalf("stored approval = %s/%s", decision, storedSpecificationID)
 	}
+	if err := store.CreateExecution(ctx, "execution-1", projectID.String(), proposal.ID().String(), current.ID().String(), approval.ID().String(), runs.StatusApproved, time.Unix(5, 0).UTC()); err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
+	if err := store.TransitionExecution(ctx, "execution-1", runs.StatusApproved, runs.StatusSubmitting, nil, nil); err != nil {
+		t.Fatalf("transition execution: %v", err)
+	}
+	auditEvents, err := store.ListAuditEvents(ctx, projectID.String(), 20)
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(auditEvents) == 0 || auditEvents[len(auditEvents)-1].EventType != "execution.state_changed" {
+		t.Fatalf("transition audit events = %#v", auditEvents)
+	}
 
 	wrongProjectID, _ := projects.NewProjectID("project-2")
 	if _, err := store.GetProposal(ctx, wrongProjectID, proposal.ID()); !errors.Is(err, postgres.ErrNotFound) {
