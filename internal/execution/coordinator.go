@@ -11,6 +11,7 @@ import (
 )
 
 var ErrSubmissionUncertain = errors.New("external submission outcome is uncertain")
+var ErrExternalExecutionRequired = errors.New("external execution ID is required")
 
 type AttemptStarter interface {
 	CreateAttempt(ctx context.Context, id, executionID, correlationID string, number int64, startedAt time.Time) error
@@ -26,6 +27,10 @@ type StateWriter interface {
 
 type Launcher interface {
 	Submit(ctx context.Context, request LaunchRequest) (LaunchResponse, error)
+}
+
+type Canceller interface {
+	Cancel(ctx context.Context, externalExecutionID string) error
 }
 
 // LaunchRequest and LaunchResponse are intentionally small coordinator
@@ -105,4 +110,19 @@ func (coordinator *Coordinator) CancelBeforeSubmission(ctx context.Context, exec
 		return errors.New("execution coordinator is not configured")
 	}
 	return coordinator.states.TransitionExecution(ctx, executionID, runs.StatusApproved, runs.StatusCancelled, nil, nil)
+}
+
+// RequestCancellation asks the external backend to cancel an identified run.
+// Local state remains unchanged until an authenticated terminal observation.
+func (coordinator *Coordinator) RequestCancellation(ctx context.Context, current runs.Status, executionID, externalExecutionID string, canceller Canceller) error {
+	if coordinator == nil || coordinator.states == nil {
+		return errors.New("execution coordinator is not configured")
+	}
+	if current == runs.StatusApproved {
+		return coordinator.CancelBeforeSubmission(ctx, executionID)
+	}
+	if canceller == nil || externalExecutionID == "" {
+		return ErrExternalExecutionRequired
+	}
+	return canceller.Cancel(ctx, externalExecutionID)
 }
