@@ -47,6 +47,19 @@ type AuditRecord struct {
 	Metadata         json.RawMessage
 }
 
+type ExecutionRecord struct {
+	ID                  string
+	ProjectID           string
+	ProposalID          string
+	SpecificationID     string
+	ApprovalID          string
+	Status              runs.Status
+	ExternalWorkspaceID *string
+	ExternalExecutionID *string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
 func (store *Store) CreateActor(ctx context.Context, actor auth.Actor) error {
@@ -446,6 +459,39 @@ func (store *Store) ApplyExternalEvent(ctx context.Context, event events.Event, 
 		return events.Conflict, fmt.Errorf("apply external event: commit: %w", err)
 	}
 	return events.Apply, nil
+}
+
+// ListRecoverableExecutions returns nonterminal work that must be resumed or
+// reconciled after a process restart.
+func (store *Store) ListRecoverableExecutions(ctx context.Context, limit int) ([]ExecutionRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := store.db.QueryContext(ctx, `
+        select id, project_id, proposal_id, specification_id, approval_id, status,
+               external_workspace_id, external_execution_id, created_at, updated_at
+        from executions where status in ('SUBMITTING', 'SUBMISSION_UNKNOWN', 'RUNNING')
+        order by updated_at asc limit $1
+    `, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recoverable executions: %w", err)
+	}
+	defer rows.Close()
+	var records []ExecutionRecord
+	for rows.Next() {
+		var record ExecutionRecord
+		if err := rows.Scan(&record.ID, &record.ProjectID, &record.ProposalID, &record.SpecificationID, &record.ApprovalID, &record.Status, &record.ExternalWorkspaceID, &record.ExternalExecutionID, &record.CreatedAt, &record.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan recoverable execution: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read recoverable executions: %w", err)
+	}
+	return records, nil
 }
 
 func nullableString(value *string) any {
