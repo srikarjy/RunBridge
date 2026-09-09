@@ -10,6 +10,8 @@ network or invent production credentials.
 
 The task injects `DATABASE_URL` and `SEQERA_TOKEN` from SSM Parameter Store,
 writes structured container logs to CloudWatch, and uses a `/healthz` check.
+The configuration also creates an immutable, scan-on-push ECR repository with a
+small untagged-image lifecycle policy.
 Use an immutable image digest in production. Database migrations, TLS ingress,
 backups, alarms, and IAM policy documents require environment-specific review.
 

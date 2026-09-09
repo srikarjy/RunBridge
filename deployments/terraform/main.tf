@@ -1,3 +1,15 @@
+resource "aws_ecr_repository" "runbridge" {
+  name                 = var.name
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration { scan_on_push = true }
+}
+
+resource "aws_ecr_lifecycle_policy" "runbridge" {
+  repository = aws_ecr_repository.runbridge.name
+  policy     = jsonencode({ rules = [{ rulePriority = 1, description = "Retain recent images", selection = { tagStatus = "untagged", countType = "imageCountMoreThan", countNumber = 5 }, action = { type = "expire" } }] })
+}
+
 resource "aws_cloudwatch_log_group" "runbridge" {
   name              = "/ecs/${var.name}"
   retention_in_days = 30
