@@ -75,6 +75,7 @@ func handlerWithAudit(store *postgres.Store, resolver httpapi.PrincipalResolver)
 	})
 	if store != nil && resolver != nil {
 		mux.Handle("GET /projects/{projectID}/audit", &httpapi.AuditHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
+		mux.Handle("GET /projects/{projectID}/executions/{executionID}", &httpapi.ExecutionHandler{Store: store, Authorizer: authorization.NewAuthorizer(store), ResolvePrincipal: resolver})
 	}
 	return mux
 }
