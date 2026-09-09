@@ -15,6 +15,7 @@ import (
 	"github.com/srikarjy/RunBridge/internal/auth"
 	"github.com/srikarjy/RunBridge/internal/events"
 	"github.com/srikarjy/RunBridge/internal/execution"
+	"github.com/srikarjy/RunBridge/internal/integrity"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
@@ -550,6 +551,28 @@ func (store *Store) GetExecution(ctx context.Context, projectID, executionID str
 		return ExecutionRecord{}, fmt.Errorf("get execution: %w", err)
 	}
 	return record, nil
+}
+
+func (store *Store) CreateApprovalReceipt(ctx context.Context, approvalID string, receipt integrity.ApprovalReceipt, createdAt time.Time) error {
+	if err := receipt.Validate(); err != nil {
+		return err
+	}
+	if receipt.ApprovalID != approvalID || createdAt.IsZero() {
+		return fmt.Errorf("create approval receipt: identity mismatch: %w", ErrConflict)
+	}
+	_, err := store.db.ExecContext(ctx, `insert into approval_receipts (approval_id, specification_digest, receipt_digest, created_at) values ($1, $2, $3, $4)`, approvalID, receipt.SpecificationDigest, receipt.DigestHex(), createdAt)
+	return classify("create approval receipt", err)
+}
+
+func (store *Store) CreateExecutionReceipt(ctx context.Context, receipt integrity.ExecutionReceipt, createdAt time.Time) error {
+	if err := receipt.Validate(); err != nil {
+		return err
+	}
+	if createdAt.IsZero() {
+		return fmt.Errorf("create execution receipt: created time is required: %w", ErrConflict)
+	}
+	_, err := store.db.ExecContext(ctx, `insert into execution_receipts (execution_id, approval_receipt_digest, manifest_digest, receipt_digest, external_execution_id, completed_at, created_at) values ($1, $2, $3, $4, $5, $6, $7)`, receipt.ExecutionID, receipt.ApprovalReceiptDigest, receipt.ManifestDigest, receipt.DigestHex(), receipt.ExternalExecutionID, receipt.CompletedAt, createdAt)
+	return classify("create execution receipt", err)
 }
 
 func nullableString(value *string) any {
