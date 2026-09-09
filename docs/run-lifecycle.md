@@ -1,6 +1,6 @@
 # Run lifecycle
 
-Conceptual design only; state names and transition details are not implemented or final. PostgreSQL will retain lifecycle state, revision identity, and transition evidence. Run status and individual submission attempts are related but distinct: a transport retry is not a new scientific intent.
+The execution transition graph is now validated in `internal/execution`; durable coordination is still being built. PostgreSQL will retain lifecycle state, revision identity, and transition evidence. Run status and individual submission attempts are related but distinct: a transport retry is not a new scientific intent.
 
 ```mermaid
 stateDiagram-v2

@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 8 are complete.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 8 are complete; Phase 9 is in progress.** Later phases are planned. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -75,6 +75,8 @@ Build only the client operations required to submit rnaseq, retrieve state, reso
 **Completion gate:** contract/adapter tests verify approved-intent translation, sanitized errors, and supported operations. Document any inability to safely correlate uncertain launches. Do not expose live submissions before Phases 9–10 safeguards exist.
 
 ## Phase 9 — Durable Execution State Machine
+
+**Status: in progress.** The execution package now validates the legal transition graph, protects terminal states, treats repeated observations as idempotent, and rejects unknown external statuses. The remaining work is transactional persistence, attempt claiming, conditional updates, retry classification, and restart recovery.
 
 Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcomes, and SUBMISSION_UNKNOWN, refining conceptual names as necessary. Introduce transactionally claimed attempts, idempotency, conditional updates, retry classification, and crash recovery. Keep cancellation intent distinct from confirmed cancellation.
 

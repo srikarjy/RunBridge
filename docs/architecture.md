@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, policy-bound approval decisions, and the narrow Seqera transport adapter are implemented through Phase 8. Execution coordination remains planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, policy-bound approval decisions, the narrow Seqera transport adapter, and the execution transition foundation are implemented through the current Phase 9 work. Transactional execution coordination remains planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
