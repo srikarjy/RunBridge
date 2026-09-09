@@ -1,7 +1,9 @@
 # RunBridge AWS deployment foundation
 
-This Terraform configuration describes a small ECS Fargate service for a
-containerized RunBridge application. It expects an existing ECS cluster,
+This Terraform configuration describes a small ECS Fargate service for the
+containerized RunBridge application. The repository root `Dockerfile` builds
+the `cmd/runbridge` service and exposes the `/healthz` endpoint used by the
+task health check. It expects an existing ECS cluster,
 private subnets, security groups, IAM roles, and SSM Parameter Store entries.
 Those shared resources are inputs so this repository does not create a public
 network or invent production credentials.
