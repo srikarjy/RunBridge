@@ -145,7 +145,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
-**Planned engineering:** context-aware request handling, idempotent operations, durable state transitions, RBAC, external reconciliation, structured logging, metrics, useful tracing, Docker, and AWS deployment. `deployments/terraform/` contains the initial ECS Fargate task/service foundation; it is not a claim of a live production environment.
+**Observability foundation:** `internal/observability` provides request/run correlation IDs and standard-library structured logger enrichment. **Planned engineering:** context-aware request handling, idempotent operations, durable state transitions, RBAC, external reconciliation, metrics, useful tracing, Docker, and AWS deployment. `deployments/terraform/` contains the initial ECS Fargate task/service foundation; it is not a claim of a live production environment.
 
 **Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes. **Later hardening:** artifact manifests and AWS KMS signing after the execution path is reliable.
 
