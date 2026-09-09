@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/srikarjy/RunBridge/internal/approvals"
 	"github.com/srikarjy/RunBridge/internal/auth"
+	"github.com/srikarjy/RunBridge/internal/execution"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
@@ -183,6 +184,61 @@ func (store *Store) CreateApproval(ctx context.Context, approval approvals.Appro
 		reviewer, approval.Decision(), approval.PolicyVersion(), string(contextBytes), approval.DecidedAt(),
 	)
 	return classify("create approval", err)
+}
+
+// CreateExecution persists the approved intent before any external launch.
+// The approval/specification foreign keys ensure the execution cannot point
+// at an unrelated or mutable proposal revision.
+func (store *Store) CreateExecution(ctx context.Context, id, projectID, proposalID, specificationID, approvalID string, status runs.Status, createdAt time.Time) error {
+	if err := execution.ValidateState(status); err != nil {
+		return fmt.Errorf("create execution: %w", err)
+	}
+	if status != runs.StatusApproved {
+		return fmt.Errorf("create execution: initial state must be APPROVED: %w", ErrConflict)
+	}
+	if createdAt.IsZero() {
+		return fmt.Errorf("create execution: created time is required: %w", ErrConflict)
+	}
+	_, err := store.db.ExecContext(ctx, `
+        insert into executions (id, project_id, proposal_id, specification_id, approval_id, status, created_at, updated_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $7)
+    `, id, projectID, proposalID, specificationID, approvalID, status, createdAt)
+	return classify("create execution", err)
+}
+
+// TransitionExecution performs a conditional update. A stale expected state
+// cannot overwrite a concurrent coordinator or reconciler decision.
+func (store *Store) TransitionExecution(ctx context.Context, id string, expected, next runs.Status, externalWorkspaceID, externalExecutionID *string) error {
+	if err := execution.Transition(expected, next); err != nil {
+		return err
+	}
+	if (externalWorkspaceID == nil) != (externalExecutionID == nil) {
+		return fmt.Errorf("transition execution: external identifiers must be supplied together: %w", ErrConflict)
+	}
+	result, err := store.db.ExecContext(ctx, `
+        update executions
+        set status = $1, external_workspace_id = coalesce($2, external_workspace_id),
+            external_execution_id = coalesce($3, external_execution_id), updated_at = now()
+        where id = $4 and status = $5
+    `, next, nullableString(externalWorkspaceID), nullableString(externalExecutionID), id, expected)
+	if err != nil {
+		return classify("transition execution", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("transition execution: rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("transition execution: expected %s for %s: %w", expected, id, ErrConflict)
+	}
+	return nil
+}
+
+func nullableString(value *string) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func (store *Store) GetProposal(ctx context.Context, projectID projects.ProjectID, proposalID runs.ProposalID) (runs.Proposal, error) {
