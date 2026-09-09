@@ -16,6 +16,7 @@ import (
 	"github.com/srikarjy/RunBridge/internal/events"
 	"github.com/srikarjy/RunBridge/internal/execution"
 	"github.com/srikarjy/RunBridge/internal/integrity"
+	"github.com/srikarjy/RunBridge/internal/observability"
 	"github.com/srikarjy/RunBridge/internal/projects"
 	"github.com/srikarjy/RunBridge/internal/reconciliation"
 	"github.com/srikarjy/RunBridge/internal/runs"
@@ -63,6 +64,14 @@ type ExecutionRecord struct {
 }
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
+
+func newAuditID() (string, error) {
+	id, err := observability.NewID()
+	if err != nil {
+		return "", fmt.Errorf("generate audit event ID: %w", err)
+	}
+	return "audit-" + id, nil
+}
 
 // LookupExternalExecution resolves a vendor identifier to the project-scoped
 // execution record before event processing. The project relationship is kept
@@ -347,6 +356,26 @@ func (store *Store) CreateAttempt(ctx context.Context, id, executionID, correlat
         values ($1, $2, $3, $4, 'pending', $5)
     `, id, executionID, number, correlationID, startedAt)
 	return classify("create execution attempt", err)
+}
+
+// RecordSubmissionAttempt appends the audit evidence for a claimed attempt.
+// The project and proposal are read from the execution foreign-key aggregate,
+// so callers cannot attribute an attempt to another project.
+func (store *Store) RecordSubmissionAttempt(ctx context.Context, executionID, attemptID, correlationID string, number int64, recordedAt time.Time) error {
+	if strings.TrimSpace(executionID) == "" || strings.TrimSpace(attemptID) == "" || strings.TrimSpace(correlationID) == "" || number <= 0 || recordedAt.IsZero() {
+		return fmt.Errorf("record submission attempt audit: invalid attempt: %w", ErrConflict)
+	}
+	var projectID, proposalID string
+	if err := store.db.QueryRowContext(ctx, `select project_id, proposal_id from executions where id = $1`, executionID).Scan(&projectID, &proposalID); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("record submission attempt audit: %w", ErrNotFound)
+	} else if err != nil {
+		return fmt.Errorf("record submission attempt audit: lookup execution: %w", err)
+	}
+	auditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	return store.RecordAuditEvent(ctx, audit.Event{ID: auditID, ProjectID: projectID, ProposalID: proposalID, ActorKind: audit.System, Type: "execution.submission_attempt", ObjectType: "execution_attempt", ObjectID: attemptID, CorrelationID: correlationID, RecordedAt: recordedAt, Metadata: map[string]any{"execution_id": executionID, "attempt_number": number}})
 }
 
 // ClaimSubmission atomically creates the first pending attempt and claims the

@@ -25,6 +25,10 @@ type RetryClaimer interface {
 	ClaimRetrySubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error
 }
 
+type AttemptAuditor interface {
+	RecordSubmissionAttempt(context.Context, string, string, string, int64, time.Time) error
+}
+
 type StateWriter interface {
 	TransitionExecution(ctx context.Context, id string, expected, next runs.Status, externalWorkspaceID, externalExecutionID *string) error
 }
@@ -78,6 +82,11 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 			return "", "", fmt.Errorf("claim execution submission: %w", err)
 		}
 	}
+	if auditor, ok := coordinator.attempts.(AttemptAuditor); ok {
+		if err := auditor.RecordSubmissionAttempt(ctx, executionID, attemptID, correlationID, attemptNumber, startedAt); err != nil {
+			return "", "", fmt.Errorf("record submission audit: %w", err)
+		}
+	}
 	return coordinator.submitClaimed(ctx, executionID, request)
 }
 
@@ -93,6 +102,11 @@ func (coordinator *Coordinator) SubmitRetry(ctx context.Context, executionID, at
 	}
 	if err := claimer.ClaimRetrySubmission(ctx, executionID, attemptID, correlationID, attemptNumber, startedAt); err != nil {
 		return "", "", fmt.Errorf("claim retry submission: %w", err)
+	}
+	if auditor, ok := coordinator.attempts.(AttemptAuditor); ok {
+		if err := auditor.RecordSubmissionAttempt(ctx, executionID, attemptID, correlationID, attemptNumber, startedAt); err != nil {
+			return "", "", fmt.Errorf("record retry submission audit: %w", err)
+		}
 	}
 	return coordinator.submitClaimed(ctx, executionID, request)
 }

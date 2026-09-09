@@ -38,6 +38,16 @@ type fakeLauncher struct {
 	err      error
 }
 
+type auditCoordinatorStore struct {
+	fakeCoordinatorStore
+	audited bool
+}
+
+func (store *auditCoordinatorStore) RecordSubmissionAttempt(context.Context, string, string, string, int64, time.Time) error {
+	store.audited = true
+	return nil
+}
+
 func (launcher fakeLauncher) Submit(context.Context, LaunchRequest) (LaunchResponse, error) {
 	return launcher.response, launcher.err
 }
@@ -76,5 +86,14 @@ func TestCoordinatorSubmitsDurableRetry(t *testing.T) {
 	status, id, err := coordinator.SubmitRetry(context.Background(), "exec-1", "attempt-2", "corr-2", 2, LaunchRequest{WorkspaceID: "123", Pipeline: "nf-core/rnaseq", Revision: "3.18.0"}, time.Now())
 	if err != nil || status != runs.StatusRunning || id != "wf-retry" || store.attempt != 1 {
 		t.Fatalf("retry submission: status=%s id=%q err=%v store=%#v", status, id, err, store)
+	}
+}
+
+func TestCoordinatorRecordsAttemptAuditBeforeLaunch(t *testing.T) {
+	store := &auditCoordinatorStore{}
+	coordinator := NewCoordinator(store, store, fakeLauncher{response: LaunchResponse{ExternalExecutionID: "wf-audited"}})
+	status, _, err := coordinator.Submit(context.Background(), "exec-1", "attempt-1", "corr-1", 1, LaunchRequest{WorkspaceID: "123", Pipeline: "nf-core/rnaseq", Revision: "3.18.0"}, time.Now())
+	if err != nil || status != runs.StatusRunning || !store.audited {
+		t.Fatalf("audit before launch: status=%s err=%v audited=%v", status, err, store.audited)
 	}
 }
