@@ -74,14 +74,18 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 		if coordinator.metrics != nil {
 			coordinator.metrics.SubmissionFailures.Add(1)
 		}
-		_ = coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil)
+		if transitionErr := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil); transitionErr != nil {
+			return "", "", fmt.Errorf("record uncertain submission: %w", transitionErr)
+		}
 		return runs.StatusSubmissionUnknown, "", fmt.Errorf("%w: %v", ErrSubmissionUncertain, err)
 	}
 	if response.ExternalExecutionID == "" {
 		if coordinator.metrics != nil {
 			coordinator.metrics.SubmissionFailures.Add(1)
 		}
-		_ = coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil)
+		if transitionErr := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil); transitionErr != nil {
+			return "", "", fmt.Errorf("record uncertain submission: %w", transitionErr)
+		}
 		return runs.StatusSubmissionUnknown, "", ErrSubmissionUncertain
 	}
 	if err := coordinator.states.TransitionExecution(ctx, executionID, runs.StatusSubmitting, runs.StatusRunning, nil, &response.ExternalExecutionID); err != nil {
