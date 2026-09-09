@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 14 — integrated foundations.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, a tested Seqera HTTP adapter and coordinator, durable execution/attempt persistence, reconciliation decisions, authenticated webhook intake, project-scoped audit access, integrity digests, observability counters, and an executable health/metrics service. Live credentials, production identity integration, and a fully wired application database remain deployment work. All other capabilities below describe intended behavior.
+**Current status: Phases 9–15 integration in progress.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, a tested Seqera HTTP adapter and coordinator, durable execution/attempt persistence, conservative reconciliation orchestration, authenticated webhook intake, project-scoped audit access with cursors, integrity receipts, observability counters, and an executable health/metrics service. Live credentials, production identity integration, and a live AWS environment remain deployment work. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -145,9 +145,9 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
-**Observability foundation:** `internal/observability` provides request/run correlation IDs, standard-library structured logger enrichment, and atomic reliability counters. **Planned engineering:** context-aware request handling, idempotent operations, durable state transitions, RBAC, external reconciliation, metrics export, useful tracing, Docker, and AWS deployment. `deployments/terraform/` contains the initial ECS Fargate task/service foundation; it is not a claim of a live production environment.
+**Observability foundation:** `internal/observability` provides request/run correlation IDs, standard-library structured logger enrichment, atomic reliability counters, and Prometheus-compatible export from the service. **Remaining engineering:** full request middleware, useful tracing, dashboards, and live deployment. `deployments/terraform/` contains an ECS Fargate task/service foundation; it is not a claim of a live production environment.
 
-**Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes. **Later hardening:** artifact manifests and AWS KMS signing after the execution path is reliable.
+**Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes, canonical artifact manifests, approval receipts, and execution receipts. **Later hardening:** chained audit hashes and AWS KMS signing after the execution path is reliable.
 
 ## Repository Structure
 
@@ -173,7 +173,7 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 9 — execution transition foundation.** Execution states now have explicit legal transitions, terminal-state protection, idempotent same-state observations, and conservative external-status mapping. Transactional persistence, attempt claiming, crash recovery, and reconciliation remain future work.
+**Phases 9–15 — integrated foundations.** Durable transitions, atomic submission claims, uncertainty handling, reconciliation decisions, authenticated event intake, append-oriented audit access, integrity receipts, operational counters, Docker packaging, and Terraform deployment resources are implemented and tested. Full production gates still require wiring the reconciliation sink to a running worker, completing end-to-end event coverage, integrating production identity and secrets, and validating a live AWS rollout.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 

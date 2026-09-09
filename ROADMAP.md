@@ -84,7 +84,7 @@ Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcom
 
 ## Phase 10 — Submission Reconciliation
 
-**Status: foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure. It does not query Seqera or change state; worker integration and persisted observation evidence remain.
+**Status: integration foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure, and its bounded service orchestrates candidate lookup, correlation, retry gating, adoption, and manual-review sinks. A production worker and persisted observation evidence remain.
 
 Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authoritative external observations. Correlate persisted attempts with remote executions. Handle no match, multiple matches, delayed visibility, and already completed runs. Only retry launches when evidence or verified external idempotency makes it safe; retain unresolved uncertainty otherwise.
 
@@ -92,7 +92,7 @@ Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authorit
 
 ## Phase 11 — Webhooks + Event Processing
 
-**Status: foundation complete.** External events now have validated source/event identity, a durable deduplication key, conservative apply/duplicate/stale/conflict decisions, and a reusable HMAC verification primitive with replay protection. HTTP intake, vendor-specific authentication wiring, and replay workers remain.
+**Status: integration foundation complete.** External events now have validated source/event identity, durable deduplication, conservative apply/duplicate/stale/conflict decisions, transactional persistence, authenticated HTTP intake, and replay protection. Vendor-specific event mapping and a production worker remain.
 
 Implement authenticated event intake, durable delivery records, idempotent consumption, duplicate handling, out-of-order awareness, and reconciliation. Acknowledge only after required persistence. Polling remains a recovery path; external events are not exactly-once.
 
@@ -100,7 +100,7 @@ Implement authenticated event intake, durable delivery records, idempotent consu
 
 ## Phase 12 — Audit Timeline
 
-**Status: foundation complete.** Audit events are append-only, external events are persisted with source identity, project-scoped timeline queries are available, and an authorization-aware HTTP handler is defined. Full event coverage and production authentication integration remain.
+**Status: integration foundation complete.** Audit events are append-only, external events are persisted with source identity, project-scoped timeline queries support bounded cursor pagination, and an authorization-aware HTTP handler is wired when the service is configured. Full event coverage and production authentication integration remain.
 
 Complete append-oriented coverage and expose authorized API queries for proposal creation, preflight, diff, policy, approval request/decision, submission attempt, external ID assignment, state changes, completion, cancellation, and artifacts. Protect records against accidental mutation and define correction/retention procedures.
 
@@ -108,7 +108,7 @@ Complete append-oriented coverage and expose authorized API queries for proposal
 
 ## Phase 13 — Integrity Hardening
 
-**Status: foundation complete.** `internal/integrity` now derives deterministic SHA-256 digests for exact normalized specifications and canonical artifact manifests. Signing and receipt persistence remain future work.
+**Status: foundation complete.** `internal/integrity` derives deterministic SHA-256 digests for exact normalized specifications and canonical artifact manifests, and PostgreSQL persists approval and execution receipt records. KMS-backed signing remains future work.
 
 Bind canonical approved specification → SHA-256 → approval receipt → execution evidence → artifact manifest → final execution receipt. Version canonicalization and receipt formats. Distinguish content identity from mutable resource locations. Consider chained audit hashes and AWS KMS signatures after basic verification works.
 
@@ -116,7 +116,7 @@ Bind canonical approved specification → SHA-256 → approval receipt → execu
 
 ## Phase 14 — Observability
 
-**Status: foundation complete.** `internal/observability` now provides request/run correlation IDs, standard-library structured logger enrichment, and atomic counters for key reliability signals. Tracing and production dashboards remain.
+**Status: foundation complete.** `internal/observability` provides request/run correlation IDs, standard-library structured logger enrichment, atomic counters, and a Prometheus-compatible metrics endpoint. Tracing and production dashboards remain.
 
 Expand structured logging, request/run/attempt correlation, error classification, integration/state metrics, and tracing where useful. Signals include submission failures, reconciliation attempts and unresolved age, duplicate webhook counts, transition conflicts, approval latency, and submission latency. Avoid secrets and high-cardinality metric labels.
 

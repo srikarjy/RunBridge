@@ -28,7 +28,7 @@ Server-side project permissions decide who may propose, review, launch, and canc
 
 ## Integrity evolution
 
-Initial correctness relies on immutable revision identity, transactional guards, and submission derived from the approved data. Later SHA-256 hashes will bind canonical specification bytes to approval receipts and execution evidence. Artifact manifests and potentially AWS KMS signatures can strengthen verification. None is implemented in Stage 1, and hashing mutable URLs alone would not establish input reproducibility.
+Initial correctness relies on immutable revision identity, transactional guards, and submission derived from the approved data. The integrity foundation now derives SHA-256 identities from exact normalized specification bytes and persists approval/execution receipt records. Artifact manifests and potentially AWS KMS signatures can strengthen verification; hashing mutable URLs alone would not establish input reproducibility.
 
 ## Future machine proposals
 
