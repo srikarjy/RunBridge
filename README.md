@@ -4,7 +4,7 @@
 
 RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phase 3 — project authorization.** The repository contains domain types, invariant tests, constrained PostgreSQL persistence, and a server-side role/permission boundary for authenticated human principals. No HTTP authentication adapter, API, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
+**Current status: Phase 4 — nf-core/rnaseq specification.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, and deterministic normalization for the first supported workflow. No HTTP authentication adapter, API, Seqera integration, Run Diff, policy engine, lifecycle transition engine, or runnable application exists yet. All other capabilities below describe intended behavior.
 
 ## The Problem
 
@@ -141,7 +141,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures. A small `pgx`-backed store persists current actors, projects, memberships, proposals, and revisions. There is no runtime command.
+**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, and audit structures. A small `pgx`-backed store persists current actors, projects, memberships, proposals, and revisions. There is no runtime command.
 
 **Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
@@ -157,6 +157,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `internal/auth/`, `internal/projects/` | Identity, permissions, memberships, and project isolation |
 | `internal/authorization/` | Project-scoped role and permission evaluation |
 | `internal/runs/` | Proposals, specification revisions, normalization, and domain invariants |
+| `internal/runs/rnaseq/` | nf-core/rnaseq request validation and deterministic normalization |
 | `internal/preflight/`, `internal/rundiff/` | Deterministic validation and semantic comparisons |
 | `internal/policy/`, `internal/approvals/` | Rules, reviewer decisions, and immutable approval targets |
 | `internal/execution/` | Durable coordination, retries, cancellation, and reconciliation |
@@ -171,7 +172,7 @@ Empty `.gitkeep` files retain the remaining planned directories in Git; they are
 
 ## Current Status
 
-**Phase 3 — project authorization.** The domain and persistence layers now resolve memberships and enforce a tested role/permission matrix for authenticated human principals. HTTP credential authentication and API middleware remain future work; no workflow execution is available yet.
+**Phase 4 — nf-core/rnaseq specification.** The first workflow-specific request model now produces deterministic versioned normalized bytes for samples, references, parameters, profile, and resources. Validation is structural; preflight, Run Diff, policy, API authentication, and workflow execution remain future work.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 

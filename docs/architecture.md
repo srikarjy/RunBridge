@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, and domain authorization boundary are implemented through Phase 3. API credential authentication, workflow-specific validation/diff, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence foundation, domain authorization boundary, and nf-core/rnaseq specification normalization are implemented through Phase 4. API credential authentication, preflight/diff behavior, approval behavior, execution coordination, and Seqera integration remain planned. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -30,7 +30,7 @@ The REST layer will receive commands and queries, authenticate callers, establis
 
 ## Domain layer
 
-The run domain will own proposals, versioned specifications, workflow identity, conceptual status, and approval/execution correspondence. A proposal may evolve; an approved revision must remain immutable. Run Diff and preflight results must reference the same revision used by policy. Canonicalization must be versioned so future normalization changes cannot silently reinterpret past approvals.
+The run domain owns proposals, versioned specifications, workflow identity, conceptual status, and approval/execution correspondence. The rnaseq package now produces a versioned canonical configuration with explicit sample ordering, resource units, and structural reference requirements. A proposal may evolve; an approved revision must remain immutable. Run Diff and preflight results must reference the same revision used by policy. Canonicalization must be versioned so future normalization changes cannot silently reinterpret past approvals.
 
 ## Project / auth layer
 
