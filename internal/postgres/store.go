@@ -63,6 +63,27 @@ type ExecutionRecord struct {
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
+// LookupExternalExecution resolves a vendor identifier to the project-scoped
+// execution record before event processing. The project relationship is kept
+// in the returned view so an event cannot be applied to another tenant.
+func (store *Store) LookupExternalExecution(ctx context.Context, externalExecutionID string) (events.ExecutionView, error) {
+	if strings.TrimSpace(externalExecutionID) == "" {
+		return events.ExecutionView{}, fmt.Errorf("lookup external execution: ID is required: %w", ErrConflict)
+	}
+	var view events.ExecutionView
+	err := store.db.QueryRowContext(ctx, `
+        select id, project_id, status, updated_at
+        from executions where external_execution_id = $1
+    `, externalExecutionID).Scan(&view.ID, &view.ProjectID, &view.Status, &view.LastEventAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return events.ExecutionView{}, fmt.Errorf("lookup external execution: %w", ErrNotFound)
+	}
+	if err != nil {
+		return events.ExecutionView{}, fmt.Errorf("lookup external execution: %w", err)
+	}
+	return view, nil
+}
+
 func (store *Store) CreateActor(ctx context.Context, actor auth.Actor) error {
 	_, err := store.db.ExecContext(ctx, `
         insert into actors (id, display_name, kind)
