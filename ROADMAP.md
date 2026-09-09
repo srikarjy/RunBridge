@@ -84,6 +84,8 @@ Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcom
 
 ## Phase 10 — Submission Reconciliation
 
+**Status: foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure. It does not query Seqera or change state; worker integration and persisted observation evidence remain.
+
 Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authoritative external observations. Correlate persisted attempts with remote executions. Handle no match, multiple matches, delayed visibility, and already completed runs. Only retry launches when evidence or verified external idempotency makes it safe; retain unresolved uncertainty otherwise.
 
 **Completion gate:** lost responses and crashes after remote acceptance recover the existing execution without automatic duplication. Document operator resolution when the API cannot establish safe retry conditions.

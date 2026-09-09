@@ -56,6 +56,8 @@ Persist correlation before sending a launch. During integration work, verify whe
 
 Matching must consider project/external workspace, attempt correlation, and execution intent, not just a friendly run name. If the external API cannot establish safe retry conditions, halt automatic resubmission and require evidence-based resolution. An operator must not convert uncertainty to failure just to unlock a retry; a deliberate new launch that accepts duplication risk requires a separately authorized, auditable decision.
 
+The reconciliation foundation encodes this conservatively: one match can be adopted, multiple matches require manual review, and an empty result remains unknown unless definitive nonacceptance is proven. A worker must persist observations and its decision before applying the local transition.
+
 ## Crash recovery
 
 | Crash point | Required recovery behavior |
