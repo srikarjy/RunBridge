@@ -33,3 +33,8 @@ Thumbs.db
 /pgdata/
 /tmp/
 *.log
+
+# Terraform provider cache and local state
+deployments/terraform/.terraform/
+deployments/terraform/*.tfstate*
+deployments/terraform/crash.log
