@@ -21,6 +21,10 @@ type AtomicClaimer interface {
 	ClaimSubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error
 }
 
+type RetryClaimer interface {
+	ClaimRetrySubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error
+}
+
 type StateWriter interface {
 	TransitionExecution(ctx context.Context, id string, expected, next runs.Status, externalWorkspaceID, externalExecutionID *string) error
 }
@@ -74,6 +78,26 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 			return "", "", fmt.Errorf("claim execution submission: %w", err)
 		}
 	}
+	return coordinator.submitClaimed(ctx, executionID, request)
+}
+
+// SubmitRetry launches a retry only after a durable reconciliation decision
+// has moved the execution from SUBMISSION_UNKNOWN to SUBMITTING.
+func (coordinator *Coordinator) SubmitRetry(ctx context.Context, executionID, attemptID, correlationID string, attemptNumber int64, request LaunchRequest, startedAt time.Time) (runs.Status, string, error) {
+	if coordinator == nil || coordinator.attempts == nil || coordinator.states == nil || coordinator.launcher == nil {
+		return "", "", errors.New("execution coordinator is not configured")
+	}
+	claimer, ok := coordinator.attempts.(RetryClaimer)
+	if !ok {
+		return "", "", errors.New("retry submission is not supported by persistence")
+	}
+	if err := claimer.ClaimRetrySubmission(ctx, executionID, attemptID, correlationID, attemptNumber, startedAt); err != nil {
+		return "", "", fmt.Errorf("claim retry submission: %w", err)
+	}
+	return coordinator.submitClaimed(ctx, executionID, request)
+}
+
+func (coordinator *Coordinator) submitClaimed(ctx context.Context, executionID string, request LaunchRequest) (runs.Status, string, error) {
 	response, err := coordinator.launcher.Submit(ctx, request)
 	if err != nil {
 		if coordinator.metrics != nil {

@@ -19,6 +19,11 @@ func (store *fakeCoordinatorStore) CreateAttempt(context.Context, string, string
 	store.attempt++
 	return nil
 }
+func (store *fakeCoordinatorStore) ClaimRetrySubmission(context.Context, string, string, string, int64, time.Time) error {
+	store.attempt++
+	store.next = runs.StatusSubmitting
+	return nil
+}
 func (store *fakeCoordinatorStore) TransitionExecution(_ context.Context, _ string, _, next runs.Status, _, external *string) error {
 	store.transition++
 	store.next = next
@@ -62,5 +67,14 @@ func TestCoordinatorCancelsOnlyApprovedExecution(t *testing.T) {
 	}
 	if store.next != runs.StatusCancelled {
 		t.Fatalf("status: %s", store.next)
+	}
+}
+
+func TestCoordinatorSubmitsDurableRetry(t *testing.T) {
+	store := &fakeCoordinatorStore{}
+	coordinator := NewCoordinator(store, store, fakeLauncher{response: LaunchResponse{ExternalExecutionID: "wf-retry"}})
+	status, id, err := coordinator.SubmitRetry(context.Background(), "exec-1", "attempt-2", "corr-2", 2, LaunchRequest{WorkspaceID: "123", Pipeline: "nf-core/rnaseq", Revision: "3.18.0"}, time.Now())
+	if err != nil || status != runs.StatusRunning || id != "wf-retry" || store.attempt != 1 {
+		t.Fatalf("retry submission: status=%s id=%q err=%v store=%#v", status, id, err, store)
 	}
 }

@@ -381,6 +381,38 @@ func (store *Store) ClaimSubmission(ctx context.Context, executionID, attemptID,
 	return nil
 }
 
+// ClaimRetrySubmission atomically advances an uncertain execution and creates
+// its next attempt. The conditional status update prevents a retry racing an
+// event that has already identified the original external execution.
+func (store *Store) ClaimRetrySubmission(ctx context.Context, executionID, attemptID, correlationID string, number int64, startedAt time.Time) error {
+	if strings.TrimSpace(executionID) == "" || strings.TrimSpace(attemptID) == "" || strings.TrimSpace(correlationID) == "" || number <= 0 || startedAt.IsZero() {
+		return fmt.Errorf("claim retry submission: invalid attempt: %w", ErrConflict)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("claim retry submission: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `insert into execution_attempts (id, execution_id, attempt_number, correlation_id, status, started_at) values ($1, $2, $3, $4, 'pending', $5)`, attemptID, executionID, number, correlationID, startedAt); err != nil {
+		return classify("claim retry attempt", err)
+	}
+	result, err := tx.ExecContext(ctx, `update executions set status = 'SUBMITTING', updated_at = $1 where id = $2 and status = 'SUBMISSION_UNKNOWN'`, startedAt, executionID)
+	if err != nil {
+		return classify("claim retry execution", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("claim retry submission: rows affected: %w", err)
+	}
+	if rows != 1 {
+		return fmt.Errorf("claim retry submission: execution is not SUBMISSION_UNKNOWN: %w", ErrConflict)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("claim retry submission: commit: %w", err)
+	}
+	return nil
+}
+
 // ResolveAttempt closes a pending/unknown attempt exactly once. A repeated
 // resolution is reported as a conflict so callers cannot silently rewrite
 // evidence used by reconciliation.
