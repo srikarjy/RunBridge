@@ -65,6 +65,13 @@ type ExecutionRecord struct {
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
+func (store *Store) Ping(ctx context.Context) error {
+	if store == nil || store.db == nil {
+		return fmt.Errorf("database is not configured")
+	}
+	return store.db.PingContext(ctx)
+}
+
 func newAuditID() (string, error) {
 	id, err := observability.NewID()
 	if err != nil {
@@ -177,6 +184,22 @@ func (store *Store) CreateProposal(ctx context.Context, proposal runs.Proposal) 
 			return err
 		}
 	}
+	proposalAuditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	if err := recordAuditTx(ctx, tx, audit.Event{ID: proposalAuditID, ProjectID: proposal.ProjectID().String(), ProposalID: proposal.ID().String(), ActorID: proposal.CreatedBy().String(), ActorKind: audit.Human, Type: audit.ProposalCreated, ObjectType: "proposal", ObjectID: proposal.ID().String(), RecordedAt: proposal.CreatedAt()}); err != nil {
+		return err
+	}
+	for _, specification := range proposal.Specifications() {
+		auditID, err := newAuditID()
+		if err != nil {
+			return err
+		}
+		if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: proposal.ProjectID().String(), ProposalID: proposal.ID().String(), ActorID: specification.CreatedBy().String(), ActorKind: audit.Human, Type: "specification.created", ObjectType: "run_specification", ObjectID: specification.ID().String(), RecordedAt: specification.CreatedAt(), Metadata: map[string]any{"revision": specification.Revision()}}); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create proposal: commit: %w", err)
 	}
@@ -222,6 +245,13 @@ func (store *Store) AddSpecification(ctx context.Context, projectID projects.Pro
 	if err := insertSpecification(ctx, tx, proposalID, specification); err != nil {
 		return err
 	}
+	auditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: projectID.String(), ProposalID: proposalID.String(), ActorID: specification.CreatedBy().String(), ActorKind: audit.Human, Type: "specification.created", ObjectType: "run_specification", ObjectID: specification.ID().String(), RecordedAt: specification.CreatedAt(), Metadata: map[string]any{"revision": specification.Revision()}}); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("add specification: commit: %w", err)
 	}
@@ -240,7 +270,12 @@ func (store *Store) CreateApproval(ctx context.Context, approval approvals.Appro
 	if reviewerID, ok := approval.Reviewer(); ok {
 		reviewer = reviewerID.String()
 	}
-	_, err = store.db.ExecContext(ctx, `
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create approval: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
         insert into approvals (
             id, project_id, proposal_id, specification_id, reviewer_id,
             decision, policy_version, review_context, decided_at
@@ -249,7 +284,33 @@ func (store *Store) CreateApproval(ctx context.Context, approval approvals.Appro
 		approval.ID().String(), approval.ProjectID().String(), approval.ProposalID().String(), approval.SpecificationID().String(),
 		reviewer, approval.Decision(), approval.PolicyVersion(), string(contextBytes), approval.DecidedAt(),
 	)
-	return classify("create approval", err)
+	if err != nil {
+		return classify("create approval", err)
+	}
+	actorKind := audit.System
+	actorID := ""
+	if reviewerID, ok := approval.Reviewer(); ok {
+		actorKind = audit.Human
+		actorID = reviewerID.String()
+	}
+	eventTypes := []string{audit.PreflightCompleted, audit.DiffCalculated, "policy.evaluated", audit.ApprovalDecided}
+	for _, eventType := range eventTypes {
+		auditID, err := newAuditID()
+		if err != nil {
+			return err
+		}
+		metadata := map[string]any{"policy_version": approval.PolicyVersion(), "decision": approval.Decision()}
+		if eventType == audit.PreflightCompleted || eventType == audit.DiffCalculated {
+			metadata["review_context"] = approval.ReviewContext()
+		}
+		if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: approval.ProjectID().String(), ProposalID: approval.ProposalID().String(), ActorID: actorID, ActorKind: actorKind, Type: eventType, ObjectType: "approval", ObjectID: approval.ID().String(), RecordedAt: approval.DecidedAt(), Metadata: metadata}); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create approval: commit: %w", err)
+	}
+	return nil
 }
 
 // CreateExecution persists the approved intent before any external launch.
@@ -272,11 +333,29 @@ func (store *Store) CreateExecutionWithWorkspace(ctx context.Context, id, projec
 	if createdAt.IsZero() {
 		return fmt.Errorf("create execution: created time is required: %w", ErrConflict)
 	}
-	_, err := store.db.ExecContext(ctx, `
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create execution: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
         insert into executions (id, project_id, proposal_id, specification_id, approval_id, status, requested_workspace_id, created_at, updated_at)
         values ($1, $2, $3, $4, $5, $6, $7, $8, $8)
     `, id, projectID, proposalID, specificationID, approvalID, status, nullableStringString(workspaceID), createdAt)
-	return classify("create execution", err)
+	if err != nil {
+		return classify("create execution", err)
+	}
+	auditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: projectID, ProposalID: proposalID, ActorKind: audit.System, Type: "execution.created", ObjectType: "execution", ObjectID: id, RecordedAt: createdAt, Metadata: map[string]any{"approval_id": approvalID, "specification_id": specificationID}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create execution: commit: %w", err)
+	}
+	return nil
 }
 
 // ListCandidates supplies recoverable attempts to a reconciliation worker.
@@ -296,6 +375,7 @@ func (store *Store) ListCandidates(ctx context.Context, limit int) ([]reconcilia
             where execution_id = e.id order by attempt_number desc limit 1
         ) a on true
         where e.status in ('SUBMITTING', 'SUBMISSION_UNKNOWN')
+          and e.updated_at <= now() - interval '30 seconds'
         order by e.updated_at asc limit $1
     `, limit)
 	if err != nil {
@@ -315,6 +395,127 @@ func (store *Store) ListCandidates(ctx context.Context, limit int) ([]reconcilia
 		return nil, fmt.Errorf("read reconciliation candidates: %w", err)
 	}
 	return candidates, nil
+}
+
+// AdoptExecution records that reconciliation found exactly one correlated
+// Seqera workflow. The execution, attempt, and audit evidence change in one
+// transaction so recovery cannot expose a partially adopted result.
+func (store *Store) AdoptExecution(ctx context.Context, candidate reconciliation.Candidate, externalID string) error {
+	if strings.TrimSpace(externalID) == "" {
+		return fmt.Errorf("adopt reconciled execution: external ID is required: %w", ErrConflict)
+	}
+	return store.applyReconciliation(ctx, candidate, "adopted", runs.StatusRunning, &externalID, execution.AttemptAccepted)
+}
+
+// KeepUnknown moves an abandoned SUBMITTING claim to SUBMISSION_UNKNOWN. A
+// later pass over an already unknown attempt is idempotent.
+func (store *Store) KeepUnknown(ctx context.Context, candidate reconciliation.Candidate) error {
+	if candidate.ExpectedStatus == runs.StatusSubmissionUnknown {
+		return nil
+	}
+	return store.applyReconciliation(ctx, candidate, "unknown", runs.StatusSubmissionUnknown, nil, execution.AttemptUnknown)
+}
+
+// AllowRetry persists the evidence-based retry decision without launching.
+// The coordinator must still atomically claim the next numbered attempt.
+func (store *Store) AllowRetry(ctx context.Context, candidate reconciliation.Candidate) error {
+	return store.recordReconciliationDecision(ctx, candidate, "retry_allowed", nil)
+}
+
+// RequireManualReview records an ambiguous multiple-match outcome once for
+// the attempt and deliberately leaves the execution uncertain.
+func (store *Store) RequireManualReview(ctx context.Context, candidate reconciliation.Candidate) error {
+	return store.recordReconciliationDecision(ctx, candidate, "manual_review", nil)
+}
+
+func (store *Store) applyReconciliation(ctx context.Context, candidate reconciliation.Candidate, decision string, next runs.Status, externalID *string, attemptStatus execution.AttemptStatus) error {
+	if err := execution.Transition(candidate.ExpectedStatus, next); err != nil {
+		return err
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("apply reconciliation: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	var projectID, proposalID string
+	err = tx.QueryRowContext(ctx, `
+        update executions set status = $1,
+            external_workspace_id = coalesce($2, external_workspace_id),
+            external_execution_id = coalesce($3, external_execution_id), updated_at = now()
+        where id = $4 and status = $5
+        returning project_id, proposal_id
+    `, next, nullableStringString(candidate.WorkspaceID), nullableString(externalID), candidate.ExecutionID, candidate.ExpectedStatus).Scan(&projectID, &proposalID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("apply reconciliation: stale execution: %w", ErrConflict)
+	}
+	if err != nil {
+		return classify("apply reconciliation execution", err)
+	}
+	attemptResult, err := tx.ExecContext(ctx, `
+        update execution_attempts set status = $1, resolved_at = now()
+        where execution_id = $2 and attempt_number = $3 and resolved_at is null
+    `, attemptStatus, candidate.ExecutionID, candidate.AttemptNumber)
+	if err != nil {
+		return classify("apply reconciliation attempt", err)
+	}
+	attemptRows, err := attemptResult.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("apply reconciliation attempt: rows affected: %w", err)
+	}
+	if attemptRows != 1 {
+		return fmt.Errorf("apply reconciliation: unresolved attempt is missing: %w", ErrConflict)
+	}
+	if err := appendReconciliationAudit(ctx, tx, candidate, projectID, proposalID, decision, externalID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("apply reconciliation: commit: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) recordReconciliationDecision(ctx context.Context, candidate reconciliation.Candidate, decision string, externalID *string) error {
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("record reconciliation decision: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	var projectID, proposalID string
+	if err := tx.QueryRowContext(ctx, `select project_id, proposal_id from executions where id = $1 and status = $2`, candidate.ExecutionID, candidate.ExpectedStatus).Scan(&projectID, &proposalID); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("record reconciliation decision: stale execution: %w", ErrConflict)
+	} else if err != nil {
+		return fmt.Errorf("record reconciliation decision: lookup execution: %w", err)
+	}
+	var exists bool
+	if err := tx.QueryRowContext(ctx, `select exists(select 1 from audit_events where event_type = $1 and object_id = $2 and correlation_id = $3)`, "execution.reconciliation_"+decision, candidate.ExecutionID, candidate.CorrelationID).Scan(&exists); err != nil {
+		return fmt.Errorf("record reconciliation decision: check duplicate: %w", err)
+	}
+	if !exists {
+		if err := appendReconciliationAudit(ctx, tx, candidate, projectID, proposalID, decision, externalID); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("record reconciliation decision: commit: %w", err)
+	}
+	return nil
+}
+
+func appendReconciliationAudit(ctx context.Context, tx *sql.Tx, candidate reconciliation.Candidate, projectID, proposalID, decision string, externalID *string) error {
+	auditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	metadata, err := json.Marshal(map[string]any{"attempt_number": candidate.AttemptNumber, "decision": decision, "external_execution_id": nullableString(externalID)})
+	if err != nil {
+		return fmt.Errorf("record reconciliation decision: marshal metadata: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `
+        insert into audit_events (id, schema_version, project_id, proposal_id, actor_kind,
+            event_type, object_type, object_id, correlation_id, recorded_at, metadata)
+        values ($1, 1, $2, $3, 'system', $4, 'execution', $5, $6, now(), $7::jsonb)
+    `, auditID, projectID, proposalID, "execution.reconciliation_"+decision, candidate.ExecutionID, candidate.CorrelationID, string(metadata))
+	return classify("record reconciliation decision", err)
 }
 
 // TransitionExecution performs a conditional update. A stale expected state
@@ -446,6 +647,28 @@ func (store *Store) ClaimRetrySubmission(ctx context.Context, executionID, attem
 		return fmt.Errorf("claim retry submission: begin transaction: %w", err)
 	}
 	defer tx.Rollback()
+	var previousCorrelationID string
+	if err := tx.QueryRowContext(ctx, `
+        select correlation_id from execution_attempts
+        where execution_id = $1 order by attempt_number desc limit 1
+    `, executionID).Scan(&previousCorrelationID); errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("claim retry submission: previous attempt is missing: %w", ErrConflict)
+	} else if err != nil {
+		return fmt.Errorf("claim retry submission: read previous attempt: %w", err)
+	}
+	var retryAuthorized bool
+	if err := tx.QueryRowContext(ctx, `
+        select exists(
+            select 1 from audit_events
+            where event_type = 'execution.reconciliation_retry_allowed'
+              and object_id = $1 and correlation_id = $2
+        )
+    `, executionID, previousCorrelationID).Scan(&retryAuthorized); err != nil {
+		return fmt.Errorf("claim retry submission: read authorization: %w", err)
+	}
+	if !retryAuthorized {
+		return fmt.Errorf("claim retry submission: reconciliation did not authorize retry: %w", ErrConflict)
+	}
 	if _, err := tx.ExecContext(ctx, `insert into execution_attempts (id, execution_id, attempt_number, correlation_id, status, started_at) values ($1, $2, $3, $4, 'pending', $5)`, attemptID, executionID, number, correlationID, startedAt); err != nil {
 		return classify("claim retry attempt", err)
 	}
@@ -527,6 +750,18 @@ func (store *Store) RecordExternalEvent(ctx context.Context, event events.Event,
 // RecordAuditEvent appends an immutable domain event. The database sequence
 // provides chronological ordering; callers never update an existing record.
 func (store *Store) RecordAuditEvent(ctx context.Context, event audit.Event) error {
+	return recordAudit(ctx, store.db, event)
+}
+
+type auditExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func recordAuditTx(ctx context.Context, tx *sql.Tx, event audit.Event) error {
+	return recordAudit(ctx, tx, event)
+}
+
+func recordAudit(ctx context.Context, executor auditExecutor, event audit.Event) error {
 	if err := event.Validate(); err != nil {
 		return err
 	}
@@ -553,7 +788,7 @@ func (store *Store) RecordAuditEvent(ctx context.Context, event audit.Event) err
 	if event.SourceSystem != "" {
 		source, sourceID = event.SourceSystem, event.SourceEventID
 	}
-	_, err = store.db.ExecContext(ctx, `
+	_, err = executor.ExecContext(ctx, `
         insert into audit_events (id, schema_version, project_id, proposal_id, actor_id, actor_kind,
             event_type, object_type, object_id, correlation_id, source_system, source_event_id,
             source_occurred_at, recorded_at, metadata)
@@ -690,6 +925,38 @@ func (store *Store) ListRecoverableExecutions(ctx context.Context, limit int) ([
 	return records, nil
 }
 
+// ListRunningExecutions supplies bounded polling work. Only executions with a
+// persisted external identity are eligible.
+func (store *Store) ListRunningExecutions(ctx context.Context, limit int) ([]events.PollCandidate, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := store.db.QueryContext(ctx, `
+        select external_execution_id, status from executions
+        where status = 'RUNNING' and external_execution_id is not null
+        order by updated_at asc limit $1
+    `, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list running executions: %w", err)
+	}
+	defer rows.Close()
+	var candidates []events.PollCandidate
+	for rows.Next() {
+		var candidate events.PollCandidate
+		if err := rows.Scan(&candidate.ExternalExecutionID, &candidate.CurrentStatus); err != nil {
+			return nil, fmt.Errorf("scan running execution: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read running executions: %w", err)
+	}
+	return candidates, nil
+}
+
 func (store *Store) GetExecution(ctx context.Context, projectID, executionID string) (ExecutionRecord, error) {
 	if strings.TrimSpace(projectID) == "" || strings.TrimSpace(executionID) == "" {
 		return ExecutionRecord{}, fmt.Errorf("get execution: project and execution are required: %w", ErrConflict)
@@ -716,8 +983,29 @@ func (store *Store) CreateApprovalReceipt(ctx context.Context, approvalID string
 	if receipt.ApprovalID != approvalID || createdAt.IsZero() {
 		return fmt.Errorf("create approval receipt: identity mismatch: %w", ErrConflict)
 	}
-	_, err := store.db.ExecContext(ctx, `insert into approval_receipts (approval_id, specification_digest, receipt_digest, created_at) values ($1, $2, $3, $4)`, approvalID, receipt.SpecificationDigest, receipt.DigestHex(), createdAt)
-	return classify("create approval receipt", err)
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create approval receipt: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `insert into approval_receipts (approval_id, specification_digest, receipt_digest, created_at) values ($1, $2, $3, $4)`, approvalID, receipt.SpecificationDigest, receipt.DigestHex(), createdAt); err != nil {
+		return classify("create approval receipt", err)
+	}
+	var projectID, proposalID string
+	if err := tx.QueryRowContext(ctx, `select project_id, proposal_id from approvals where id = $1`, approvalID).Scan(&projectID, &proposalID); err != nil {
+		return fmt.Errorf("create approval receipt: lookup approval: %w", err)
+	}
+	auditID, err := newAuditID()
+	if err != nil {
+		return err
+	}
+	if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: projectID, ProposalID: proposalID, ActorKind: audit.System, Type: "approval.receipt_created", ObjectType: "approval", ObjectID: approvalID, RecordedAt: createdAt, Metadata: map[string]any{"receipt_digest": receipt.DigestHex(), "specification_digest": receipt.SpecificationDigest}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create approval receipt: commit: %w", err)
+	}
+	return nil
 }
 
 func (store *Store) CreateExecutionReceipt(ctx context.Context, receipt integrity.ExecutionReceipt, createdAt time.Time) error {
@@ -727,8 +1015,37 @@ func (store *Store) CreateExecutionReceipt(ctx context.Context, receipt integrit
 	if createdAt.IsZero() {
 		return fmt.Errorf("create execution receipt: created time is required: %w", ErrConflict)
 	}
-	_, err := store.db.ExecContext(ctx, `insert into execution_receipts (execution_id, approval_receipt_digest, manifest_digest, receipt_digest, external_execution_id, completed_at, created_at) values ($1, $2, $3, $4, $5, $6, $7)`, receipt.ExecutionID, receipt.ApprovalReceiptDigest, receipt.ManifestDigest, receipt.DigestHex(), receipt.ExternalExecutionID, receipt.CompletedAt, createdAt)
-	return classify("create execution receipt", err)
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create execution receipt: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `insert into execution_receipts (execution_id, approval_receipt_digest, manifest_digest, receipt_digest, external_execution_id, completed_at, created_at) values ($1, $2, $3, $4, $5, $6, $7)`, receipt.ExecutionID, receipt.ApprovalReceiptDigest, receipt.ManifestDigest, receipt.DigestHex(), receipt.ExternalExecutionID, receipt.CompletedAt, createdAt); err != nil {
+		return classify("create execution receipt", err)
+	}
+	var projectID, proposalID string
+	if err := tx.QueryRowContext(ctx, `select project_id, proposal_id from executions where id = $1`, receipt.ExecutionID).Scan(&projectID, &proposalID); err != nil {
+		return fmt.Errorf("create execution receipt: lookup execution: %w", err)
+	}
+	for _, event := range []struct {
+		typeName string
+		metadata map[string]any
+	}{
+		{audit.ArtifactRecorded, map[string]any{"manifest_digest": receipt.ManifestDigest}},
+		{"execution.receipt_created", map[string]any{"receipt_digest": receipt.DigestHex(), "approval_receipt_digest": receipt.ApprovalReceiptDigest}},
+	} {
+		auditID, err := newAuditID()
+		if err != nil {
+			return err
+		}
+		if err := recordAuditTx(ctx, tx, audit.Event{ID: auditID, ProjectID: projectID, ProposalID: proposalID, ActorKind: audit.System, Type: event.typeName, ObjectType: "execution", ObjectID: receipt.ExecutionID, RecordedAt: createdAt, Metadata: event.metadata}); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create execution receipt: commit: %w", err)
+	}
+	return nil
 }
 
 func nullableString(value *string) any {

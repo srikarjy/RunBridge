@@ -1,6 +1,6 @@
 # Configuration direction
 
-No application configuration loader exists yet. This directory will hold documented, sanitized examples for application settings, PostgreSQL connectivity, Seqera integration, workflow/version allowlists, policy limits, and environment-specific settings.
+The service reads runtime settings from environment variables. Local setups may use `DATABASE_URL`; managed deployments can provide `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, and `DB_SSLMODE` separately. Configured persistence requires `SEQERA_TOKEN`, `RUNBRIDGE_API_TOKEN`, and actor identity. This directory can later hold sanitized policy-limit and workflow-allowlist examples.
 
 Configuration affecting execution or authorization must be versioned or referenced in the run's review evidence. Separate credentials from execution-relevant configuration; changing a compute profile must not silently change approved intent. Define resource units and task/run scope explicitly.
 

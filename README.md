@@ -2,9 +2,9 @@
 
 **Preflight, approval, and audit infrastructure for expensive computational workflows.**
 
-RunBridge is a planned Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice will support **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
+RunBridge is a Go control plane between a person requesting a scientific workflow and the platform that executes it. Its first vertical slice supports **nf-core/rnaseq through Seqera / Nextflow**, with PostgreSQL as the system of record.
 
-**Current status: Phases 9–15 integration in progress.** The repository contains domain types, constrained PostgreSQL persistence, project authorization, deterministic nf-core/rnaseq normalization, structured preflight checks, semantic Run Diff, immutable policy-bound approval decisions, a tested Seqera HTTP adapter and coordinator, durable execution/attempt persistence, conservative reconciliation orchestration, authenticated webhook intake, project-scoped audit access with cursors, integrity receipts, observability counters, and an executable health/metrics service. Live credentials, production identity integration, and a live AWS environment remain deployment work. All other capabilities below describe intended behavior.
+**Current status: Phases 0–15 implemented and locally verified.** The repository contains project authorization, deterministic nf-core/rnaseq normalization, preflight, semantic Run Diff, immutable approvals, PostgreSQL persistence, Seqera launch/status/cancellation adapters, durable submission attempts, conservative reconciliation and polling workers, signed event intake, append-oriented audit access, integrity receipts, operational metrics, Docker packaging, and validated AWS Terraform. No live workflow or billable AWS resource is created by the test suite; a live deployment is intentionally not claimed.
 
 ## The Problem
 
@@ -30,7 +30,7 @@ Propose → Diff → Preflight → Approve → Execute → Reconcile → Audit
 6. **Reconcile:** resolve external state through polling and execution events, including uncertain submissions.
 7. **Audit:** preserve the evidence connecting intent, approval, submission, and outcome.
 
-The flow describes the review experience, not independent unguarded API calls. Both diff and preflight must reference the same normalized specification before approval; audit events will be recorded throughout.
+The flow describes the review experience, not independent unguarded API calls. Both diff and preflight reference the same normalized specification before approval; durable audit events record the corresponding aggregate changes.
 
 ## Run Diff
 
@@ -44,7 +44,7 @@ Run Diff is implemented for normalized nf-core/rnaseq specifications as a determ
 
 ## Preflight
 
-Planned checks cover required fields, supported workflow and revision, sample input structure, project access, accessible datasets where verifiable, reference configuration conflicts, and resource boundaries. Results will identify the check, affected field, severity, and reason. Preflight cannot prove scientific correctness or guarantee that remotely referenced inputs remain unchanged.
+Implemented checks cover required fields, supported workflow and revision, sample input structure, project access, reference configuration conflicts, and resource boundaries. Results identify the check, affected field, severity, and reason. Preflight cannot prove scientific correctness or guarantee that remotely referenced inputs remain unchanged.
 
 ## Approval
 
@@ -54,19 +54,19 @@ The invariant is: **the run that executes must correspond to the run specificati
 
 ## Execution
 
-The initial execution backend is Seqera, running Nextflow and nf-core/rnaseq. RunBridge will sit above that platform; Nextflow will remain responsible for workflow execution. A narrow integration boundary will translate the frozen specification into the external launch request and retain execution identifiers and submission evidence.
+The initial execution backend is Seqera, running Nextflow and nf-core/rnaseq. RunBridge sits above that platform; Nextflow remains responsible for workflow execution. The narrow integration boundary translates frozen intent into an external request and retains identifiers and submission evidence. Each attempt uses an opaque deterministic run name so a lost launch response can be reconciled before retry.
 
 ## Durable State
 
-Run state must survive server restarts, repeated client requests, duplicate webhooks, network failures, and retries. PostgreSQL will persist transitions and the evidence needed to resume work.
+Run state survives server restarts, repeated requests, duplicate events, network failures, and retries. PostgreSQL persists transitions and the evidence needed to resume work.
 
-An especially important case is **SUBMISSION_UNKNOWN**: Seqera may accept a launch while RunBridge loses the response. Retrying immediately could launch another expensive run. RunBridge must retain the uncertain attempt and reconcile against external evidence before deciding whether another submission is safe. The [lifecycle](docs/run-lifecycle.md) and [reliability design](docs/reliability.md) describe this boundary.
+An especially important case is **SUBMISSION_UNKNOWN**: Seqera may accept a launch while RunBridge loses the response. Retrying immediately could launch another expensive run. RunBridge retains the uncertain attempt and reconciles against workspace-scoped Seqera workflow listings before deciding whether another submission is safe. The [lifecycle](docs/run-lifecycle.md) and [reliability design](docs/reliability.md) describe this boundary.
 
 ## Auditability
 
-The planned chronological event history will record the proposal, diff, preflight result, policy decision, approval, approved specification, submission attempt, external execution ID, state transitions, relevant artifacts, and final status.
+The chronological event history records the proposal, diff, preflight result, policy decision, approval, approved specification, submission attempt, external execution ID, state transitions, relevant artifacts, and final status.
 
-It should answer: **Who requested what, what changed, who approved it, what executed, and what happened?** Audit evidence will reference immutable revisions and distinguish user actions, internal coordination, and external observations. See the [audit model](docs/audit-model.md).
+It answers: **Who requested what, what changed, who approved it, what executed, and what happened?** Audit evidence references immutable revisions and distinguishes user actions, internal coordination, and external observations. See the [audit model](docs/audit-model.md).
 
 ## System Architecture
 
@@ -141,13 +141,13 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 ## Technology
 
-**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. `internal/policy` makes deterministic allow/review/deny decisions, and `internal/approvals` binds those decisions to exact specification revisions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, audit, and integrity-receipt structures. The service exposes health, readiness, metrics, authorized audit/execution reads, and an authenticated Seqera webhook route when configured.
+**Present:** Go domain packages for human actors, projects, memberships, proposals, immutable specification revisions, workflow identity, normalized configuration values, and run status vocabulary. The authorization package resolves project membership and evaluates explicit permissions. `internal/runs/rnaseq` defines and canonically normalizes the first workflow-specific request. `internal/preflight` evaluates structured workflow, configuration, project, and resource checks. `internal/policy` makes deterministic allow/review/deny decisions, and `internal/approvals` binds those decisions to exact specification revisions. PostgreSQL migrations define durable project, proposal, approval, execution, attempt, audit, and integrity-receipt structures. The service exposes health, readiness, metrics, authorized audit/execution reads, polling-based Seqera observations, and signed event intake for a configured relay.
 
-**Planned core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
+**Core:** Go, REST, PostgreSQL, Seqera API, Nextflow, and nf-core/rnaseq.
 
-**Observability foundation:** `internal/observability` provides server-owned request correlation IDs, structured completion logging, run correlation primitives, atomic reliability counters, and Prometheus-compatible export from the service. **Remaining engineering:** useful tracing, dashboards, and live deployment. `deployments/terraform/` contains an ECS Fargate task/service foundation; it is not a claim of a live production environment.
+**Observability:** `internal/observability` provides server-owned request correlation IDs, structured completion and worker-error logging, run correlation primitives, atomic reliability counters, and Prometheus-compatible export. Environment-specific tracing and dashboards can be added later. `deployments/terraform/` contains a validated ECS, ALB, and RDS deployment; it is not a claim of a live production environment.
 
-**Security foundation:** bearer-token authentication protects configured project APIs, webhook requests use timestamped HMAC-SHA256 verification with replay limits, request bodies are bounded at the webhook boundary, and global responses include conservative browser/security headers. Production identity, secret rotation, TLS ingress, and least-privilege cloud policies remain deployment concerns.
+**Security:** bearer-token authentication protects project APIs; relay events use timestamped HMAC-SHA256 verification, replay limits, and bounded bodies; and global responses include conservative security headers. The deployment adds TLS ingress, managed secrets, a read-only non-root container, narrow IAM, private PostgreSQL, restricted security groups, and automated Go vulnerability scanning. A full production identity provider remains later work.
 
 **Integrity foundation:** `internal/integrity` derives SHA-256 identities from exact normalized specification bytes, canonical artifact manifests, approval receipts, and execution receipts. **Later hardening:** chained audit hashes and AWS KMS signing after the execution path is reliable.
 
@@ -155,7 +155,7 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 
 | Location | Intended responsibility |
 | --- | --- |
-| `cmd/runbridge/` | Future service entry point and dependency wiring |
+| `cmd/runbridge/` | Service entry point, HTTP routes, and worker wiring |
 | `internal/auth/`, `internal/projects/` | Identity, permissions, memberships, and project isolation |
 | `internal/authorization/` | Project-scoped role and permission evaluation |
 | `internal/runs/` | Proposals, specification revisions, normalization, and domain invariants |
@@ -167,15 +167,15 @@ RunBridge is designed so that AI systems may eventually propose or explain actio
 | `internal/postgres/` | Embedded PostgreSQL migrations and persistence adapters |
 | `internal/audit/`, `internal/observability/` | Event history and operational signals |
 | `integrations/seqera/` | External API translation and behavior |
-| `configs/`, `deployments/` | Configuration guidance and future deployment direction |
+| `configs/`, `deployments/` | Runtime configuration guidance, Docker, and AWS Terraform |
 | `docs/` | Architecture, lifecycle, approval, audit, and reliability designs |
-| `tests/integration/`, `tests/fixtures/` | Future integration verification and sanitized fixture data |
+| `tests/integration/`, `tests/fixtures/` | PostgreSQL integration verification and sanitized fixture data |
 
 Empty `.gitkeep` files retain the remaining planned directories in Git; they are not implemented packages. This layout is provisional and may be simplified as the first vertical slice reveals real boundaries.
 
 ## Runtime configuration and verification
 
-With `DATABASE_URL` set, the service runs embedded PostgreSQL migrations at startup. `RUNBRIDGE_API_TOKEN`, `RUNBRIDGE_ACTOR_ID`, and `RUNBRIDGE_ACTOR_NAME` enable the project-scoped read APIs. `RUNBRIDGE_WEBHOOK_SECRET` enables `POST /webhooks/seqera`; requests must carry the timestamp and HMAC headers described in the webhook package. Secrets belong in a managed secret store, never in Git.
+With `DATABASE_URL` set, or with `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` supplied separately, the service runs embedded PostgreSQL migrations at startup. A configured database also requires `SEQERA_TOKEN`, `RUNBRIDGE_API_TOKEN`, and actor identity; startup fails closed when those boundaries are incomplete. `RUNBRIDGE_WEBHOOK_SECRET` enables signed event intake for a configured relay. Secrets belong in a managed secret store, never in Git.
 
 The repository’s repeatable checks are:
 
@@ -190,7 +190,7 @@ The latest coverage run reports package coverage for the tested domain and integ
 
 ## Current Status
 
-**Phases 9–15 — integrated foundations.** Durable transitions, atomic submission claims, uncertainty handling, reconciliation decisions, authenticated event intake, append-oriented audit access, integrity receipts, operational counters, Docker packaging, and Terraform deployment resources are implemented and tested. Full production gates still require wiring the reconciliation sink to a running worker, completing end-to-end event coverage, integrating production identity and secrets, and validating a live AWS rollout.
+**Phases 9–15 — complete in the repository.** Durable transitions, atomic attempts, exact-name Seqera reconciliation, lifecycle polling, authenticated event intake, transactional audit coverage, integrity receipts, operational counters, Docker packaging, and a complete Terraform deployment slice are implemented and tested. A live AWS rollout is deliberately unperformed because it requires credentials and creates charges.
 
 Run unit checks with `go test ./...`. PostgreSQL integration tests run when `RUNBRIDGE_TEST_DATABASE_URL` points to a dedicated test database; each test creates and removes its own schema.
 

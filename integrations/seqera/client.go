@@ -45,8 +45,20 @@ type LaunchResponse struct {
 }
 
 type Workflow struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
+	ID      string `json:"id"`
+	RunName string `json:"runName"`
+	Status  string `json:"status"`
+}
+
+type WorkflowListItem struct {
+	WorkspaceID int64    `json:"workspaceId"`
+	Workflow    Workflow `json:"workflow"`
+}
+
+type ListWorkflowsResponse struct {
+	HasMore   bool               `json:"hasMore"`
+	TotalSize int64              `json:"totalSize"`
+	Workflows []WorkflowListItem `json:"workflows"`
 }
 
 type Client struct {
@@ -125,6 +137,26 @@ func (c *Client) GetWorkflow(ctx context.Context, workflowID string) (Workflow, 
 	return workflow, nil
 }
 
+// ListWorkflows uses Seqera's workspace-scoped workflow search. Search is
+// treated as a candidate filter; callers must still compare exact run names.
+func (c *Client) ListWorkflows(ctx context.Context, workspaceID, search string, max int) (ListWorkflowsResponse, error) {
+	if strings.TrimSpace(workspaceID) == "" {
+		return ListWorkflowsResponse{}, ErrWorkspaceRequired
+	}
+	if max <= 0 || max > 100 {
+		max = 100
+	}
+	query := url.Values{}
+	query.Set("workspaceId", workspaceID)
+	query.Set("search", search)
+	query.Set("max", strconv.Itoa(max))
+	var response ListWorkflowsResponse
+	if err := c.doJSONQuery(ctx, http.MethodGet, "/workflow", query, nil, &response); err != nil {
+		return ListWorkflowsResponse{}, err
+	}
+	return response, nil
+}
+
 func (c *Client) WorkflowStatus(ctx context.Context, workflowID string) (runs.Status, error) {
 	workflow, err := c.GetWorkflow(ctx, workflowID)
 	if err != nil {
@@ -141,12 +173,16 @@ func (c *Client) Cancel(ctx context.Context, workflowID string) error {
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path, workspaceID string, payload, result any) error {
-	endpoint := *c.baseURL
-	endpoint.Path = strings.TrimRight(c.baseURL.Path, "/") + path
-	query := endpoint.Query()
+	query := url.Values{}
 	if workspaceID != "" {
 		query.Set("workspaceId", workspaceID)
 	}
+	return c.doJSONQuery(ctx, method, path, query, payload, result)
+}
+
+func (c *Client) doJSONQuery(ctx context.Context, method, path string, query url.Values, payload, result any) error {
+	endpoint := *c.baseURL
+	endpoint.Path = strings.TrimRight(c.baseURL.Path, "/") + path
 	endpoint.RawQuery = query.Encode()
 	var body io.Reader
 	if payload != nil {

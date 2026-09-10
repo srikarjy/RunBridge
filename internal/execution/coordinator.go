@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
@@ -44,8 +45,16 @@ type Canceller interface {
 // LaunchRequest and LaunchResponse are intentionally small coordinator
 // contracts. An integration adapter can implement Launcher without leaking
 // vendor-specific response types into lifecycle code.
-type LaunchRequest struct{ WorkspaceID, Pipeline, Revision, ParamsText string }
+type LaunchRequest struct{ WorkspaceID, RunName, Pipeline, Revision, ParamsText string }
 type LaunchResponse struct{ ExternalExecutionID string }
+
+// CorrelationRunName creates the stable external name used to find a launch
+// whose HTTP response was lost. Hashing keeps caller-provided correlation
+// values out of vendor-visible names while retaining deterministic lookup.
+func CorrelationRunName(correlationID string) string {
+	digest := sha256.Sum256([]byte(correlationID))
+	return fmt.Sprintf("runbridge-%x", digest[:12])
+}
 
 type Coordinator struct {
 	attempts AttemptStarter
@@ -87,6 +96,7 @@ func (coordinator *Coordinator) Submit(ctx context.Context, executionID, attempt
 			return "", "", fmt.Errorf("record submission audit: %w", err)
 		}
 	}
+	request.RunName = CorrelationRunName(correlationID)
 	return coordinator.submitClaimed(ctx, executionID, request)
 }
 
@@ -108,6 +118,7 @@ func (coordinator *Coordinator) SubmitRetry(ctx context.Context, executionID, at
 			return "", "", fmt.Errorf("record retry submission audit: %w", err)
 		}
 	}
+	request.RunName = CorrelationRunName(correlationID)
 	return coordinator.submitClaimed(ctx, executionID, request)
 }
 

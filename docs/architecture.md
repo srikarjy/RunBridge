@@ -1,6 +1,6 @@
 # Architecture
 
-The core domain model, PostgreSQL persistence foundation, domain authorization boundary, nf-core/rnaseq specification normalization, deterministic preflight checks, semantic Run Diff, policy-bound approval decisions, the narrow Seqera transport adapter, durable execution coordination, conservative reconciliation orchestration, authenticated event intake, audit access, integrity receipts, observability counters, and deployment resources are implemented as the Phase 9–15 foundation. Production workers, identity integration, and live AWS rollout remain integration gates. The target remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
+The core domain model, PostgreSQL persistence, authorization boundary, nf-core/rnaseq normalization, preflight, semantic Run Diff, policy-bound approvals, Seqera adapter, durable execution coordination, reconciliation and polling workers, authenticated event intake, audit access, integrity receipts, observability, and AWS deployment resources are implemented through Phase 15. A live AWS rollout is intentionally not claimed. The architecture remains one Go service, PostgreSQL, and one Seqera integration for nf-core/rnaseq.
 
 ## Boundaries and dependencies
 
@@ -50,19 +50,19 @@ The initial deterministic policy denies failed preflight, requires review for fi
 
 ## Execution layer
 
-Execution coordination will persist submission intent before external work, enforce legal transitions, prevent competing workers from taking the same attempt, and resume incomplete work after crashes. It will coordinate bounded retries, polling, event processing, cancellation, and ambiguous submission reconciliation. Worker ownership alone cannot guarantee an external side effect occurs once. Never infer remote non-execution merely from an expired lease or a timeout.
+Execution coordination persists submission intent before external work, enforces legal transitions, prevents competing workers from taking the same attempt, and resumes incomplete work after crashes. It coordinates bounded retries, polling, event processing, cancellation, and ambiguous submission reconciliation. Worker ownership alone cannot guarantee an external side effect occurs once. Never infer remote non-execution merely from an expired lease or a timeout.
 
 ## Seqera integration
 
-The adapter owns the documented HTTP paths for launch, workflow lookup, and cancellation, bearer-token transport, API-version headers, response decoding, and basic error classification. It returns external identifiers and status but never mutates the local lifecycle. Launch payload mapping from the approved rnaseq specification, idempotency facilities, correlation searches, webhook authentication, and consistency guarantees must be verified before production execution; this phase assumes none without evidence.
+The adapter owns the documented HTTP paths for launch, workflow lookup, and cancellation, bearer-token transport, API-version headers, response decoding, and basic error classification. It returns external identifiers and status but never mutates the local lifecycle. Launch payload mapping derives from the approved rnaseq specification, and reconciliation performs exact workspace/run-name matching. Polling is the authoritative implemented observation path. Signed event intake supports a configured relay; a native Seqera webhook contract is not claimed without vendor documentation.
 
 Submission must derive from frozen execution-relevant data. Credentials are resolved separately, and any mutable profile, reference, or environment that can alter intent needs pinning or explicit recorded resolution. Save submission evidence to demonstrate the mapping between approval and the external request. See [reliability](reliability.md).
 
 ## Persistence and transaction boundaries
 
-PostgreSQL is the system of record for identities, projects, memberships, proposals, normalized revisions, policy decisions, approvals, run state, submission attempts, external execution IDs, and audit events. The Phase 2 schema establishes these structural relationships and expected access indexes; later phases will evolve it when validation, diff, execution, and artifact domain models become concrete.
+PostgreSQL is the system of record for identities, projects, memberships, proposals, exact normalized revision bytes, policy decisions, approvals, run state, submission attempts, external execution IDs, audit events, and integrity receipts. Constraints and indexes enforce structural relationships, project boundaries, state vocabulary, and retry identity.
 
-Current aggregate writes use short transactions, and revision creation locks its proposal row before checking the next revision. Future lifecycle operations must commit a state change, its audit event, and any durable work intent together. Unique constraints and conditional state/revision updates protect against concurrent commands. External HTTP calls cannot commit atomically with PostgreSQL. Persist intent, perform the call outside the transaction, and record or reconcile its outcome. No distributed transaction or queue is assumed to remove this uncertainty.
+Current aggregate writes use short transactions, and revision creation locks its proposal row before checking the next revision. Lifecycle operations commit state changes, audit events, and durable work intent together where correctness requires it. Unique constraints and conditional state/revision updates protect against concurrent commands. External HTTP calls cannot commit atomically with PostgreSQL. Persist intent, perform the call outside the transaction, and record or reconcile its outcome. No distributed transaction or queue is assumed to remove this uncertainty.
 
 ## Audit and observability
 

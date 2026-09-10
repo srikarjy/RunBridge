@@ -1,6 +1,6 @@
 # Approval model
 
-The approval domain and deterministic policy foundation are implemented in Phase 7; transport orchestration, reviewer authentication, freshness policy, and external execution remain future work. **Approve immutable intent, not mutable UI state.**
+The approval domain, deterministic policy, transport orchestration, and execution binding are implemented. The current service uses configured bearer credentials; production identity-provider integration and richer freshness policies remain later hardening. **Approve immutable intent, not mutable UI state.**
 
 ## Approval target
 
@@ -10,7 +10,7 @@ An editable proposal points to revisions; an approval points directly to one imm
 
 ## Decision evidence
 
-A future approval record will identify the approval, project, run, specification revision, actor/reviewer, decision, timestamp, reason, policy version, diff and baseline identities, and preflight result. The decision can approve, reject, or record a deterministic no-review authorization. A human approval must never be fabricated for the no-review path.
+An approval record identifies the approval, project, run, specification revision, actor/reviewer, decision, timestamp, reason, policy version, diff and baseline identities, and preflight result. The decision can approve, reject, or record a deterministic no-review authorization. A human approval must never be fabricated for the no-review path.
 
 Policy evaluates supported workflows/revisions, project permissions, resource boundaries, accessible inputs, significant changes, and reviewer requirements. Start with simple deterministic code/config rules. Failed mandatory validation or policy denial cannot be bypassed by approving a screen.
 

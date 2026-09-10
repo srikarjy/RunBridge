@@ -32,12 +32,31 @@ func (t *fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		status, body = http.StatusOK, `{"workflowId":"wf-1"}`
 	case "GET /workflow/wf-1":
 		status, body = http.StatusOK, `{"id":"wf-1","status":"RUNNING"}`
+	case "GET /workflow":
+		if r.URL.Query().Get("workspaceId") != "123" || r.URL.Query().Get("search") != "runbridge-key" || r.URL.Query().Get("max") != "25" {
+			return nil, io.ErrUnexpectedEOF
+		}
+		status, body = http.StatusOK, `{"hasMore":false,"totalSize":1,"workflows":[{"workspaceId":123,"workflow":{"id":"wf-1","runName":"runbridge-key","status":"RUNNING"}}]}`
 	case "POST /workflow/wf-1/cancel":
 		status = http.StatusNoContent
 	default:
 		status = http.StatusNotFound
 	}
 	return &http.Response{StatusCode: status, Status: http.StatusText(status), Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+}
+
+func TestClientListsWorkspaceWorkflows(t *testing.T) {
+	client, err := NewClient("https://seqera.example", "secret", &http.Client{Transport: &fakeTransport{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.ListWorkflows(context.Background(), "123", "runbridge-key", 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.TotalSize != 1 || len(response.Workflows) != 1 || response.Workflows[0].Workflow.RunName != "runbridge-key" {
+		t.Fatalf("response: %#v", response)
+	}
 }
 
 func TestWorkflowStatusMapsExternalState(t *testing.T) {

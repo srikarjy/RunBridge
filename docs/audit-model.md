@@ -1,6 +1,6 @@
 # Audit model
 
-Planned behavior; the Phase 2 schema reserves a constrained `audit_events` table, but no event-writing service or timeline API exists yet. Audit history should answer who requested what, what changed, who approved it, what executed, and what happened. PostgreSQL will hold append-oriented evidence alongside lifecycle records.
+PostgreSQL stores append-oriented audit evidence alongside lifecycle records. Aggregate writes append proposal/specification, review, approval, execution, attempt, reconciliation, external observation, transition, artifact, and receipt events in the same transaction where correctness requires it. The authorized timeline API uses bounded cursor pagination and project isolation.
 
 ## Event envelope
 
@@ -16,7 +16,7 @@ Planned behavior; the Phase 2 schema reserves a constrained `audit_events` table
 | Correlation and source identifiers | Request, submission attempt, external execution, and delivery deduplication |
 | Metadata | Structured reasons, prior/new state, and minimal relevant evidence |
 
-Exact storage and schemas are deferred. Timestamps alone do not establish total ordering across systems; persist a stable local ordering mechanism and distinguish arrival order from source-reported time.
+PostgreSQL provides the current storage schema and stable local ordering. Timestamps alone do not establish total ordering across systems, so arrival order remains distinct from source-reported time.
 
 ## Timeline coverage
 
@@ -32,7 +32,7 @@ Application paths should append events, with database privileges and schema cons
 
 ## Artifacts and integrity
 
-Artifact records should identify location, provenance, external execution, and available version/size/content evidence without copying large scientific datasets into the control-plane database. Later manifests and SHA-256 hashes can bind recorded outputs to execution receipts; chained audit hashes and KMS signatures are optional hardening. Missing or unverified artifacts must remain explicitly marked, and artifact collection failure must not rewrite a confirmed execution outcome.
+Artifact records identify location, provenance, external execution, and available version/size/content evidence without copying large scientific datasets into the control-plane database. Canonical manifests and SHA-256 hashes bind recorded outputs to execution receipts; chained audit hashes and KMS signatures are optional hardening. Missing or unverified artifacts must remain explicitly marked, and artifact collection failure must not rewrite a confirmed execution outcome.
 
 ## Access and data minimization
 

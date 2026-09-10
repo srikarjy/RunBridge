@@ -1,8 +1,10 @@
 # RunBridge deployment operations
 
 This runbook describes the controls around the ECS and PostgreSQL deployment
-foundation. It assumes the environment supplies private networking, IAM roles,
-an encrypted PostgreSQL service, and SSM SecureString parameters.
+slice. It assumes the environment supplies a VPC, public/private subnets, an
+ACM certificate, private-subnet egress, and three SSM SecureString parameters.
+Terraform creates the ECS roles, encrypted PostgreSQL service, and load
+balancer. Applying it creates billable resources.
 
 ## Release and migration order
 
@@ -10,8 +12,8 @@ an encrypted PostgreSQL service, and SSM SecureString parameters.
    change.
 2. Push the image to the immutable ECR repository and update `image` with its
    digest in the environment variable file held outside Git.
-3. Confirm the task role can read only the named SSM parameters and that the
-   security group permits database egress.
+3. Confirm the generated execution role can read only the named SSM parameters
+   and RDS-managed password, and review all security-group paths.
 4. Apply Terraform. The first task runs embedded migrations before it serves
    readiness, so a failed migration keeps the service out of rotation.
 5. Verify `/healthz`, `/readyz`, `/metrics`, and an authenticated project-scoped
@@ -30,9 +32,10 @@ reverse an applied database migration unless a reviewed down migration exists.
 
 ## Secrets and identity
 
-`DATABASE_URL`, `SEQERA_TOKEN`, `RUNBRIDGE_API_TOKEN`, and
-`RUNBRIDGE_WEBHOOK_SECRET` are read from SSM SecureString parameters. Rotate a
-secret by writing a new parameter value, forcing a new ECS deployment, checking
+`SEQERA_TOKEN`, `RUNBRIDGE_API_TOKEN`, and `RUNBRIDGE_WEBHOOK_SECRET` are read
+from SSM SecureString parameters. RDS manages the database master password in
+Secrets Manager. Rotate an application secret by writing a new parameter
+value, forcing a new ECS deployment, checking
 the authenticated health path, and then revoking the old value. Values never
 belong in Terraform state files, logs, audit metadata, or environment files
 committed to the repository.

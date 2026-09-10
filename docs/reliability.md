@@ -1,6 +1,6 @@
 # Reliability design
 
-Stage 1 requirements, not implemented guarantees. RunBridge controls expensive external side effects. PostgreSQL can serialize local decisions, but it cannot make a remote launch atomic with a local commit. The design favors explicit uncertainty over accidentally launching duplicate work.
+RunBridge controls expensive external side effects. PostgreSQL serializes local decisions, but it cannot make a remote launch atomic with a local commit. The implementation favors explicit uncertainty over accidentally launching duplicate work and uses durable attempts, deterministic Seqera run names, reconciliation, and polling to recover.
 
 ## Failure model
 
@@ -56,7 +56,7 @@ Persist correlation before sending a launch. During integration work, verify whe
 
 Matching must consider project/external workspace, attempt correlation, and execution intent, not just a friendly run name. If the external API cannot establish safe retry conditions, halt automatic resubmission and require evidence-based resolution. An operator must not convert uncertainty to failure just to unlock a retry; a deliberate new launch that accepts duplication risk requires a separately authorized, auditable decision.
 
-The reconciliation foundation encodes this conservatively: one match can be adopted, multiple matches require manual review, and an empty result remains unknown unless definitive nonacceptance is proven. A worker must persist observations and its decision before applying the local transition.
+Reconciliation encodes this conservatively: one exact workspace/run-name match is adopted transactionally, multiple matches create manual-review evidence, and an empty result remains unknown unless definitive nonacceptance is proven. A retry claim requires a persisted `retry_allowed` reconciliation decision for the latest attempt.
 
 Webhook authentication should verify the raw request body before parsing it. The security foundation uses an HMAC-SHA256 signature over a timestamp and body, compares signatures in constant time, and rejects timestamps outside a configured replay window. The concrete header format and secret rotation policy remain integration-specific.
 
@@ -94,6 +94,6 @@ RunBridge may temporarily lag Seqera. Queries should expose last observed time a
 
 Planned signals include age/count of unresolved submissions, stale observations, retry attempts, duplicate deliveries, transition conflicts, integration failures, and approval/submission latency. Use run/attempt IDs for logs and traces, with bounded metric dimensions. Alerts and operator actions must preserve evidence and project isolation.
 
-## Verification gates for later phases
+## Verification coverage
 
-Future domain and integration tests should exercise concurrent repeated commands, changed payloads under one key, approval edits racing with launch, crashes around each persistence boundary, lost launch responses, delayed search visibility, delayed workers after lease expiry, duplicate/out-of-order events, and cancellation racing with completion. A deterministic fake external adapter can model failures before any controlled live integration test. No such tests or product behavior are introduced in Stage 1.
+Domain, adapter, worker, and PostgreSQL integration tests exercise repeated commands, transactional rollback, lost launch responses, conservative empty searches, exact correlation matching, retry authorization, duplicate events, and non-regressing transitions. Deterministic fake external adapters model failure paths without launching paid workflows. Additional controlled integration testing against a dedicated Seqera environment is required before production use, especially for delayed search visibility and cancellation races.

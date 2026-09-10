@@ -17,6 +17,7 @@ import (
 	"github.com/srikarjy/RunBridge/internal/postgres"
 	"github.com/srikarjy/RunBridge/internal/preflight"
 	"github.com/srikarjy/RunBridge/internal/projects"
+	"github.com/srikarjy/RunBridge/internal/reconciliation"
 	"github.com/srikarjy/RunBridge/internal/rundiff"
 	"github.com/srikarjy/RunBridge/internal/runs"
 )
@@ -129,6 +130,9 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := store.TransitionExecution(ctx, "execution-2", runs.StatusSubmitting, runs.StatusSubmissionUnknown, nil, nil); err != nil {
 		t.Fatalf("mark submission unknown: %v", err)
 	}
+	if _, err := db.ExecContext(ctx, `update executions set updated_at = now() - interval '1 minute' where id = 'execution-2'`); err != nil {
+		t.Fatalf("age uncertain execution for recovery: %v", err)
+	}
 	candidates, err := store.ListCandidates(ctx, 10)
 	if err != nil {
 		t.Fatalf("list reconciliation candidates: %v", err)
@@ -142,6 +146,13 @@ func TestPostgresPersistence(t *testing.T) {
 	if !found {
 		t.Fatalf("workspace execution not recoverable: %#v", candidates)
 	}
+	retryCandidate := reconciliation.Candidate{ExecutionID: "execution-2", WorkspaceID: "workspace-123", CorrelationID: "correlation-1", AttemptNumber: 1, MaxAttempts: 3, ExpectedStatus: runs.StatusSubmissionUnknown}
+	if err := store.ClaimRetrySubmission(ctx, "execution-2", "attempt-blind", "correlation-blind", 2, time.Unix(8, 0).UTC()); !errors.Is(err, postgres.ErrConflict) {
+		t.Fatalf("blind retry claim error = %v, want ErrConflict", err)
+	}
+	if err := store.AllowRetry(ctx, retryCandidate); err != nil {
+		t.Fatalf("authorize reconciled retry: %v", err)
+	}
 	if err := store.ClaimRetrySubmission(ctx, "execution-2", "attempt-2", "correlation-2", 2, time.Unix(8, 0).UTC()); err != nil {
 		t.Fatalf("claim retry submission: %v", err)
 	}
@@ -154,6 +165,39 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if attemptCount != 2 {
 		t.Fatalf("attempt count = %d, want 2 after duplicate rollback", attemptCount)
+	}
+
+	if err := store.CreateExecutionWithWorkspace(ctx, "execution-3", projectID.String(), proposal.ID().String(), current.ID().String(), approval.ID().String(), runs.StatusApproved, "123", time.Unix(10, 0).UTC()); err != nil {
+		t.Fatalf("create reconciliation execution: %v", err)
+	}
+	if err := store.ClaimSubmission(ctx, "execution-3", "attempt-3", "correlation-3", 1, time.Unix(11, 0).UTC()); err != nil {
+		t.Fatalf("claim reconciliation execution: %v", err)
+	}
+	candidate := reconciliation.Candidate{ExecutionID: "execution-3", WorkspaceID: "123", CorrelationID: "correlation-3", AttemptNumber: 1, MaxAttempts: 3, ExpectedStatus: runs.StatusSubmitting}
+	if err := store.AdoptExecution(ctx, candidate, "workflow-3"); err != nil {
+		t.Fatalf("adopt reconciled execution: %v", err)
+	}
+	var adoptedStatus, externalWorkspace, externalExecution, attemptStatus string
+	if err := db.QueryRowContext(ctx, `
+        select e.status, e.external_workspace_id, e.external_execution_id, a.status
+        from executions e join execution_attempts a on a.execution_id = e.id
+        where e.id = 'execution-3' and a.attempt_number = 1
+    `).Scan(&adoptedStatus, &externalWorkspace, &externalExecution, &attemptStatus); err != nil {
+		t.Fatalf("read adopted execution: %v", err)
+	}
+	if adoptedStatus != "RUNNING" || externalWorkspace != "123" || externalExecution != "workflow-3" || attemptStatus != "accepted" {
+		t.Fatalf("adopted execution = %s/%s/%s/%s", adoptedStatus, externalWorkspace, externalExecution, attemptStatus)
+	}
+	running, err := store.ListRunningExecutions(ctx, 10)
+	if err != nil || len(running) != 1 || running[0].ExternalExecutionID != "workflow-3" {
+		t.Fatalf("running executions = %#v, err=%v", running, err)
+	}
+	var reconciliationAuditCount int
+	if err := db.QueryRowContext(ctx, `select count(*) from audit_events where object_id = 'execution-3' and event_type = 'execution.reconciliation_adopted'`).Scan(&reconciliationAuditCount); err != nil {
+		t.Fatal(err)
+	}
+	if reconciliationAuditCount != 1 {
+		t.Fatalf("reconciliation audit count = %d", reconciliationAuditCount)
 	}
 
 	wrongProjectID, _ := projects.NewProjectID("project-2")

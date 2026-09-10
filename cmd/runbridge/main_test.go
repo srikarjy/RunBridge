@@ -46,3 +46,19 @@ func TestReadinessRequiresPersistence(t *testing.T) {
 		t.Fatalf("readiness status: %d", recorder.Code)
 	}
 }
+
+func TestDatabaseConnectionStringFromManagedSecretParts(t *testing.T) {
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("DB_HOST", "database.internal")
+	t.Setenv("DB_PORT", "5432")
+	t.Setenv("DB_USER", "runbridge")
+	t.Setenv("DB_PASSWORD", "p@ss:/word")
+	t.Setenv("DB_NAME", "runbridge")
+	connection, err := databaseConnectionString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection != "postgres://runbridge:p%40ss%3A%2Fword@database.internal:5432/runbridge?sslmode=require" {
+		t.Fatalf("connection = %q", connection)
+	}
+}

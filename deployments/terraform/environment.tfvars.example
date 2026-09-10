@@ -1,17 +1,17 @@
-aws_region                   = "us-east-1"
-name                         = "runbridge"
-image                        = "123456789012.dkr.ecr.us-east-1.amazonaws.com/runbridge@sha256:<immutable-digest>"
-cluster_arn                  = "arn:aws:ecs:us-east-1:123456789012:cluster/example"
-subnet_ids                   = ["subnet-private-a", "subnet-private-b"]
-security_group_ids           = ["sg-example"]
-execution_role_arn           = "arn:aws:iam::123456789012:role/runbridge-ecs-execution"
-task_role_arn                = "arn:aws:iam::123456789012:role/runbridge-task"
+aws_region     = "us-east-1"
+name           = "runbridge"
+image          = "123456789012.dkr.ecr.us-east-1.amazonaws.com/runbridge@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+vpc_id         = "vpc-example"
+private_subnet_ids = ["subnet-private-a", "subnet-private-b"]
+public_subnet_ids  = ["subnet-public-a", "subnet-public-b"]
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/example"
+
 seqera_token_parameter_arn   = "arn:aws:ssm:us-east-1:123456789012:parameter/runbridge/seqera-token"
-database_url_parameter_arn   = "arn:aws:ssm:us-east-1:123456789012:parameter/runbridge/database-url"
 api_token_parameter_arn      = "arn:aws:ssm:us-east-1:123456789012:parameter/runbridge/api-token"
 webhook_secret_parameter_arn = "arn:aws:ssm:us-east-1:123456789012:parameter/runbridge/webhook-secret"
-actor_id                     = "runbridge-service"
-actor_name                   = "RunBridge service"
-desired_count                = 1
-cpu                          = 512
-memory                       = 1024
+
+actor_id      = "runbridge-service"
+actor_name    = "RunBridge service"
+desired_count = 1
+cpu           = 512
+memory        = 1024

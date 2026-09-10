@@ -16,7 +16,7 @@ func (adapter *LauncherAdapter) Submit(ctx context.Context, request execution.La
 	if adapter == nil || adapter.client == nil {
 		return execution.LaunchResponse{}, ErrUnexpectedStatus
 	}
-	response, err := adapter.client.Submit(ctx, LaunchRequest{WorkspaceID: request.WorkspaceID, Pipeline: request.Pipeline, Revision: request.Revision, ParamsText: request.ParamsText})
+	response, err := adapter.client.Submit(ctx, LaunchRequest{WorkspaceID: request.WorkspaceID, RunName: request.RunName, Pipeline: request.Pipeline, Revision: request.Revision, ParamsText: request.ParamsText})
 	if err != nil {
 		return execution.LaunchResponse{}, err
 	}

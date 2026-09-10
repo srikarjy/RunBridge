@@ -1,6 +1,6 @@
 # RunBridge roadmap
 
-Phases are implementation gates, not dates. **Phases 0 through 8 are complete; foundations for Phases 9 through 15 are implemented, with their full completion gates still in progress.** The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
+Phases are implementation gates, not dates. **Phases 0 through 15 are complete in the repository.** Phase 15 is validated infrastructure code; no live, billable AWS deployment is claimed. The first product slice is a human-driven nf-core/rnaseq proposal through Seqera / Nextflow, with deterministic authorization and PostgreSQL-backed execution evidence.
 
 The sequence builds capabilities incrementally; no live launch path should be exposed until authorization, durable execution, and ambiguous-submission handling are ready. Early Seqera integration work uses controlled adapters/fixtures, not an unguarded production launch endpoint. Audit persistence begins with domain mutations; Phase 12 completes timeline coverage and access. Cryptographic hardening later strengthens, rather than introduces, approval-to-execution correspondence.
 
@@ -28,7 +28,7 @@ Introduce migrations and persistence for projects, memberships, proposals, speci
 
 ## Phase 3 — Authentication + Project Authorization
 
-**Complete for the domain authorization boundary.** HTTP credential authentication and identity-provider integration remain transport work for the future API.
+**Complete for the current static-token boundary.** The HTTP service authenticates configured bearer credentials, resolves the actor, and applies server-side project permissions. Integration with a production identity provider remains later hardening.
 
 Choose the minimum appropriate authentication mechanism. Enforce server-side project membership and permissions for commands and queries. Consider viewer, runner, reviewer, and admin roles; settle exact grants and reviewer separation rules during implementation. Avoid building a new identity platform.
 
@@ -68,7 +68,7 @@ Implement proposal → preflight/diff → deterministic approval requirement →
 
 ## Phase 8 — Seqera Integration
 
-**Status: complete.** Add a narrow adapter for the documented Seqera Platform API. The boundary targets `POST /workflow/launch`, `GET /workflow/{workflowId}`, and `POST /workflow/{workflowId}/cancel`, sends bearer authentication and API version headers, and returns external identifiers/status without owning RunBridge lifecycle state. Contract tests use an in-memory transport; no live credentials or production launch path are included. Mapping the approved rnaseq specification into a verified launch payload, idempotency, retries, and reconciliation remain explicit follow-up work.
+**Complete.** The narrow adapter covers launch, workflow lookup/listing, status, and cancellation using bearer authentication and API version headers. Launch attempts receive deterministic, opaque run names so workspace-scoped workflow listing can correlate a lost response without exposing the local correlation value. Contract tests use an in-memory transport; no real workflow is launched by the test suite.
 
 Build only the client operations required to submit rnaseq, retrieve state, resolve external IDs, and cancel where supported. Keep request translation and external error/state handling behind a narrow adapter. Verify actual launch schemas, authentication, idempotency/correlation options, pagination, rate limits, and cancellation semantics before relying on them.
 
@@ -76,7 +76,7 @@ Build only the client operations required to submit rnaseq, retrieve state, reso
 
 ## Phase 9 — Durable Execution State Machine
 
-**Status: integration foundation complete.** The execution package validates the legal transition graph, protects terminal states, treats repeated observations as idempotent, and rejects unknown external statuses. PostgreSQL persists executions with conditional transitions, atomically claims initial and retry attempts, records uncertainty, and lists recoverable work after restart. Remaining work is a continuously running worker and complete transition-to-audit transaction coverage.
+**Complete.** The execution package validates the legal transition graph, protects terminal states, treats repeated observations as idempotent, and rejects unknown external statuses. PostgreSQL conditionally changes state, atomically claims numbered attempts, retains uncertainty, and couples state transitions with audit evidence. Cancellable workers recover persisted work after restart, with a grace period preventing them from racing an in-flight launch call.
 
 Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcomes, and SUBMISSION_UNKNOWN, refining conceptual names as necessary. Introduce transactionally claimed attempts, idempotency, conditional updates, retry classification, and crash recovery. Keep cancellation intent distinct from confirmed cancellation.
 
@@ -84,7 +84,7 @@ Persist legal transitions through APPROVED, SUBMITTING, RUNNING, terminal outcom
 
 ## Phase 10 — Submission Reconciliation
 
-**Status: integration foundation complete.** The reconciliation package now makes conservative decisions for one external match, no match, multiple matches, and definitive failure; its bounded service orchestrates candidate lookup, correlation, retry gating, adoption, and manual-review sinks; and its in-process worker runs bounded recovery passes with cancellation and transient-error handling. A production Seqera observation adapter and persisted observation evidence remain.
+**Complete.** The reconciliation worker queries Seqera by the deterministic per-attempt run name within the requested workspace. One exact match is adopted with its attempt and audit evidence in one PostgreSQL transaction; an empty, eventually consistent result remains unknown; multiple matches create manual-review evidence; and only an explicit definitive failure can authorize a bounded retry. Network errors never authorize retries.
 
 Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authoritative external observations. Correlate persisted attempts with remote executions. Handle no match, multiple matches, delayed visibility, and already completed runs. Only retry launches when evidence or verified external idempotency makes it safe; retain unresolved uncertainty otherwise.
 
@@ -92,7 +92,7 @@ Resolve SUBMITTING → network uncertainty → SUBMISSION_UNKNOWN using authorit
 
 ## Phase 11 — Webhooks + Event Processing
 
-**Status: integration foundation complete.** External events now have validated source/event identity, durable deduplication, conservative apply/duplicate/stale/conflict decisions, transactional persistence, authenticated HTTP intake, and replay protection. Vendor-specific event mapping and a production worker remain.
+**Complete.** A production polling worker retrieves state for persisted Seqera workflow IDs and applies changed statuses transactionally. External event processing validates source/event identity, deduplicates durably, rejects stale or conflicting transitions, and preserves terminal states. The optional HTTP intake is HMAC-authenticated, timestamp-bounded, and body-limited for a configured relay; polling is the authoritative recovery path because no undocumented Seqera outbound payload is assumed.
 
 Implement authenticated event intake, durable delivery records, idempotent consumption, duplicate handling, out-of-order awareness, and reconciliation. Acknowledge only after required persistence. Polling remains a recovery path; external events are not exactly-once.
 
@@ -100,7 +100,7 @@ Implement authenticated event intake, durable delivery records, idempotent consu
 
 ## Phase 12 — Audit Timeline
 
-**Status: integration foundation complete.** Audit events are append-only, external events are persisted with source identity, project-scoped timeline queries support bounded cursor pagination, and an authorization-aware HTTP handler is wired when the service is configured. Full event coverage and production authentication integration remain.
+**Complete.** Proposal/specification creation, preflight and Run Diff review evidence, policy and approval decisions, execution creation, attempts, reconciliation, transitions, external observations, integrity receipts, and artifact manifests append audit events. Aggregate writes and their audit evidence share transactions. Project-scoped timeline queries use bounded cursor pagination and server-side authorization.
 
 Complete append-oriented coverage and expose authorized API queries for proposal creation, preflight, diff, policy, approval request/decision, submission attempt, external ID assignment, state changes, completion, cancellation, and artifacts. Protect records against accidental mutation and define correction/retention procedures.
 
@@ -108,7 +108,7 @@ Complete append-oriented coverage and expose authorized API queries for proposal
 
 ## Phase 13 — Integrity Hardening
 
-**Status: foundation complete.** `internal/integrity` derives deterministic SHA-256 digests for exact normalized specifications and canonical artifact manifests, and PostgreSQL persists approval and execution receipt records. KMS-backed signing remains future work.
+**Complete.** `internal/integrity` derives and verifies deterministic SHA-256 digests for exact normalized specification bytes, canonical artifact manifests, approval receipts, and execution receipts. PostgreSQL persists receipts and appends their audit evidence transactionally. KMS-backed signatures remain an optional later extension and are not claimed.
 
 Bind canonical approved specification → SHA-256 → approval receipt → execution evidence → artifact manifest → final execution receipt. Version canonicalization and receipt formats. Distinguish content identity from mutable resource locations. Consider chained audit hashes and AWS KMS signatures after basic verification works.
 
@@ -116,7 +116,7 @@ Bind canonical approved specification → SHA-256 → approval receipt → execu
 
 ## Phase 14 — Observability
 
-**Status: foundation complete.** `internal/observability` provides request/run correlation IDs, standard-library structured logger enrichment, atomic counters, and a Prometheus-compatible metrics endpoint. Tracing and production dashboards remain.
+**Complete.** Server-generated request/run correlation, structured completion and worker-error logs, classified errors, reliability counters, and a Prometheus-compatible endpoint cover the current service. Metrics avoid run IDs and other unbounded labels. Distributed tracing and environment-specific dashboards remain optional operational additions.
 
 Expand structured logging, request/run/attempt correlation, error classification, integration/state metrics, and tracing where useful. Signals include submission failures, reconciliation attempts and unresolved age, duplicate webhook counts, transition conflicts, approval latency, and submission latency. Avoid secrets and high-cardinality metric labels.
 
@@ -124,7 +124,7 @@ Expand structured logging, request/run/attempt correlation, error classification
 
 ## Phase 15 — AWS Deployment
 
-**Status: foundation complete.** Docker packaging, ECS Fargate Terraform resources, CloudWatch logging, SSM secret references, health checks, and sanitized environment examples are present. A live AWS deployment, restore verification, and operational rollout are not claimed.
+**Implementation complete; live deployment intentionally not performed.** The validated Terraform creates an ECS Fargate cluster/service, immutable ECR repository, TLS application load balancer, private encrypted RDS PostgreSQL with a managed master password, least-privilege execution/task roles, restricted security groups, CloudWatch logs, readiness checks, backups, deletion protection, and circuit-breaker rollback. The distroless container runs read-only, and migrations execute before readiness. Applying this template creates billable AWS resources, so repository verification stops at formatting and provider-schema validation.
 
 Package the Go service with Docker. Choose an appropriately sized AWS application service and PostgreSQL setup, with secrets management, migrations, health/readiness checks, backups, and observability. Document rollout, rollback, credential rotation, and unresolved-submission recovery. No Kubernetes is required.
 

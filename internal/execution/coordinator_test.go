@@ -36,6 +36,7 @@ func (store *fakeCoordinatorStore) TransitionExecution(_ context.Context, _ stri
 type fakeLauncher struct {
 	response LaunchResponse
 	err      error
+	request  *LaunchRequest
 }
 
 type auditCoordinatorStore struct {
@@ -48,7 +49,10 @@ func (store *auditCoordinatorStore) RecordSubmissionAttempt(context.Context, str
 	return nil
 }
 
-func (launcher fakeLauncher) Submit(context.Context, LaunchRequest) (LaunchResponse, error) {
+func (launcher fakeLauncher) Submit(_ context.Context, request LaunchRequest) (LaunchResponse, error) {
+	if launcher.request != nil {
+		*launcher.request = request
+	}
 	return launcher.response, launcher.err
 }
 
@@ -95,5 +99,19 @@ func TestCoordinatorRecordsAttemptAuditBeforeLaunch(t *testing.T) {
 	status, _, err := coordinator.Submit(context.Background(), "exec-1", "attempt-1", "corr-1", 1, LaunchRequest{WorkspaceID: "123", Pipeline: "nf-core/rnaseq", Revision: "3.18.0"}, time.Now())
 	if err != nil || status != runs.StatusRunning || !store.audited {
 		t.Fatalf("audit before launch: status=%s err=%v audited=%v", status, err, store.audited)
+	}
+}
+
+func TestCoordinatorBindsCorrelationToExternalRunName(t *testing.T) {
+	store := &fakeCoordinatorStore{}
+	var submitted LaunchRequest
+	coordinator := NewCoordinator(store, store, fakeLauncher{response: LaunchResponse{ExternalExecutionID: "wf-1"}, request: &submitted})
+	_, _, err := coordinator.Submit(context.Background(), "exec-1", "attempt-1", "sensitive-correlation", 1, LaunchRequest{}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := CorrelationRunName("sensitive-correlation")
+	if submitted.RunName != want || submitted.RunName == "sensitive-correlation" {
+		t.Fatalf("run name = %q, want %q", submitted.RunName, want)
 	}
 }

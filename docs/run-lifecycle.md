@@ -1,6 +1,6 @@
 # Run lifecycle
 
-The execution transition graph is now validated in `internal/execution`; durable coordination is still being built. PostgreSQL will retain lifecycle state, revision identity, and transition evidence. Run status and individual submission attempts are related but distinct: a transport retry is not a new scientific intent.
+The execution transition graph is validated in `internal/execution`, while PostgreSQL retains lifecycle state, revision identity, attempts, reconciliation decisions, and transition evidence. Run status and individual submission attempts are related but distinct: a transport retry is not a new scientific intent.
 
 ```mermaid
 stateDiagram-v2
@@ -50,6 +50,6 @@ The diagram shows the main path; guarded alternatives below also apply. External
 
 ## Recovery and correlation
 
-The coordinator will recover persisted unfinished attempts after restart. Reconciliation needs durable project/run/attempt correlation, external IDs when known, and observation evidence. Seqera-derived transitions will be distinguishable from human commands and local policy decisions. Each accepted local transition and its audit record belong in one transaction.
+The runtime starts cancellable reconciliation and polling workers that recover persisted unfinished attempts after restart. Reconciliation uses durable project/run/attempt correlation, deterministic external run names, external IDs when known, and audit evidence. Seqera-derived transitions are distinguishable from human commands and local policy decisions. Each accepted local transition and its audit record belong in one transaction.
 
 Final state mapping, retry eligibility, cancellation representation, and correction procedures will be settled against actual Seqera behavior. See [reliability](reliability.md) for the ambiguous launch case.
